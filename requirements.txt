@@ -1,0 +1,11 @@
+numpy
+pyyaml
+pandas
+seaborn
+roboflow
+matplotlib  
+ultralytics
+albumentations
+Flask 
+flask-cors
+psycopg2
