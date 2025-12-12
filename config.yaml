@@ -1,0 +1,59 @@
+# config.yaml
+
+# ====================================================================
+# --- CẤU HÌNH MÔ HÌNH VÀ NGƯỠNG TIN CẬY
+# ====================================================================
+
+MODELS:
+  # Đường dẫn tới các file weights của mô hình
+  POSE_MODEL_NAME: 'models/yolo11n-pose.pt'
+  OBJECT_MODEL_NAME: 'models/yolo11n_object365.pt'  # Giả định mô hình Object Detection (Objects365/Custom)
+  RISK_MODEL_NAME: 'models/best.pt'
+
+THRESHOLDS:
+  # Ngưỡng tin cậy (Confidence Thresholds) riêng cho từng mô hình
+  DEFAULT_POSE_CONF: 0.6
+  DEFAULT_OBJECT_CONF: 0.4
+  DEFAULT_RISK_CONF: 0.7
+
+  # Ngưỡng IoU cho phân loại tương tác và gán nhãn rủi ro
+  IOU_HOLDING_THRESHOLD: 0.05
+  IOU_RISK_ASSIGN_THRESHOLD: 0.5
+
+SKIP_FRAMES:
+  # Tần suất xử lý (Skip Frames) mặc định
+  DEFAULT_POSE_SKIP: 2
+  DEFAULT_OBJECT_SKIP: 5
+  DEFAULT_RISK_SKIP: 10
+
+# ====================================================================
+# --- CẤU HÌNH HÀNH VI VÀ VẼ (DRAWING)
+# ====================================================================
+
+DRAWING:
+  # Cấu hình Vẽ Mặc định
+  DEFAULT_OBJECTS_DRAW: True
+  DEFAULT_KEYPOINT_DRAW: False
+  DEFAULT_RISK_DRAW_BBOX: False
+  DEFAULT_RISK_DRAW_KEYPOINT: True
+
+  # Cấu hình Vẽ (Màu sắc theo BGR)
+  LINE_COLOR: [255, 0, 255]      # Magenta
+  POINT_COLOR: [0, 0, 255]       # Red
+  RISK_NORMAL_COLOR: [255, 255, 0] # Cyan
+  RISK_SUSPICIOUS_COLOR: [0, 0, 255] # Red
+
+BEHAVIOR:
+  # Cấu hình Di chuyển 
+  GRID_COLS: 20
+  MOVEMENT_THRESHOLD_CELLS: 1
+  MOVEMENT_HISTORY_LENGTH: 15
+
+  # ID Lớp của mô hình Rủi ro 
+  RISK_NORMAL_ID: 0
+  RISK_SUSPICIOUS_ID: 1
+  
+  # ID Vật thể trong Objects365 (Giả định)
+  CABINET_SHELF_ID: 12 
+  TROLLEY_ID: 124        
+  HANDBAG_SATCHEL_ID: 13

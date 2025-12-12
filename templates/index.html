@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>YOLO Pose Multi-Model Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; height: 100vh; margin: 0; background-color: #f4f4f9; }
+        #sidebar { width: 300px; background-color: #333; color: white; padding: 20px; box-shadow: 2px 0 5px rgba(0,0,0,0.5); overflow-y: auto; }
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        #video-container { width: 100%; max-width: 1200px; height: 70%; max-height: 800px; border: 2px dashed #ccc; display: flex; align-items: center; justify-content: center; position: relative; background-color: #eee; }
+        #video-feed { max-width: 100%; max-height: 100%; object-fit: contain; }
+        #upload-box { text-align: center; padding: 50px; cursor: pointer; }
+        .controls, .model-settings { margin-bottom: 20px; padding: 10px; border: 1px solid #555; border-radius: 5px; }
+        .controls button { width: 100%; padding: 10px; margin-top: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        .controls #start-btn { background-color: #4CAF50; color: white; }
+        .controls #stop-btn { background-color: #f44336; color: white; }
+        .controls #continue-btn { background-color: #2196F3; color: white; }
+        .model-toggle { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .slider { width: 40px; height: 20px; background-color: #ccc; border-radius: 10px; position: relative; cursor: pointer; transition: background-color 0.4s; }
+        .slider.checked { background-color: #4CAF50; }
+        .slider:before { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background-color: white; top: 2px; left: 2px; transition: transform 0.4s; }
+        .slider.checked:before { transform: translateX(20px); }
+        .setting-group { margin-top: 10px; padding-left: 10px; border-left: 2px solid #777; }
+        .info-message { position: absolute; bottom: 10px; background-color: rgba(0, 0, 0, 0.7); color: white; padding: 5px 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2>Bộ điều khiển Tracking</h2>
+
+        <div class="controls">
+            <h3>Điều khiển</h3>
+            <button id="start-btn" onclick="sendCommand('start')">▶️ Start</button>
+            <button id="stop-btn" onclick="sendCommand('stop')">⏸️ Stop</button>
+            <button id="continue-btn" onclick="sendCommand('continue')">🔄 Continue</button>
+            <button id="reset-btn" onclick="sendCommand('reset')">🛑 Reset</button>
+        </div>
+        
+        <div class="model-settings">
+            <h3>Cấu hình Mô hình</h3>
+            
+            <div id="model-list">
+                </div>
+            
+            <div class="setting-group">
+                <h4>Ngưỡng và Skip Frame</h4>
+                <div id="dynamic-settings">
+                    </div>
+            </div>
+
+            <div class="setting-group">
+                <h4>Hiển thị Kết quả</h4>
+                <div class="model-toggle">
+                    <label>Vẽ Keypoint (Behavior)</label>
+                    <div class="slider checked" id="keypoint_draw" onclick="toggleSetting(this)"></div>
+                </div>
+                <div class="model-toggle">
+                    <label>Vẽ Object Detection</label>
+                    <div class="slider checked" id="objects_draw" onclick="toggleSetting(this)"></div>
+                </div>
+                <div class="model-toggle">
+                    <label>Vẽ Bbox Risk riêng</label>
+                    <div class="slider" id="risk_draw_bbox" onclick="toggleSetting(this)"></div>
+                </div>
+                <div class="model-toggle">
+                    <label>Vẽ Keypoint Risk</label>
+                    <div class="slider checked" id="risk_draw_keypoint" onclick="toggleSetting(this)"></div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <div id="main-content">
+        <h1>Video Tracking Output</h1>
+        <div id="video-container">
+            <input type="file" id="video-upload" style="display: none;" accept="video/*" onchange="uploadVideo(this.files[0])">
+            
+            <div id="upload-box" onclick="document.getElementById('video-upload').click()">
+                <p>Drag & Drop video hoặc click để chọn file</p>
+                <p id="upload-status"></p>
+            </div>
+            
+            <img id="video-feed" style="display: none;">
+            
+            <div class="info-message" id="system-status">Trạng thái: Đang chờ video...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/control';
+        const UPLOAD_URL = '/upload';
+        
+        let models = [
+            { id: 'pose', name: 'Pose (Behavior/Tracking)', enabled: true, conf: 0.6, skip: 2, default_conf: 0.6, default_skip: 2 },
+            { id: 'object', name: 'Object (Interaction)', enabled: true, conf: 0.4, skip: 5, default_conf: 0.4, default_skip: 5 },
+            { id: 'risk', name: 'Risk (Suspicious)', enabled: true, conf: 0.7, skip: 10, default_conf: 0.7, default_skip: 10 }
+        ];
+
+        let drawSettings = {
+            keypoint_draw: false, // Default: FALSE trong Python, nhưng để checked trong HTML
+            objects_draw: true,
+            risk_draw_bbox: false,
+            risk_draw_keypoint: true
+        };
+
+        let isVideoUploaded = false;
+        let isTrackingRunning = false;
+        const videoFeedImg = document.getElementById('video-feed');
+        const uploadBox = document.getElementById('upload-box');
+        const systemStatus = document.getElementById('system-status');
+
+        // --- HÀM KHỞI TẠO ---
+
+        function initSidebar() {
+            const modelList = document.getElementById('model-list');
+            const dynamicSettings = document.getElementById('dynamic-settings');
+
+            models.forEach(model => {
+                // Tạo Toggle
+                modelList.innerHTML += `
+                    <div class="model-toggle">
+                        <label>${model.name}</label>
+                        <div class="slider ${model.enabled ? 'checked' : ''}" id="model_${model.id}_enabled" onclick="toggleModel(this, '${model.id}')"></div>
+                    </div>
+                `;
+
+                // Tạo Input Ngưỡng (Conf)
+                dynamicSettings.innerHTML += `
+                    <label for="${model.id}_conf_thresh">${model.name} Conf (${model.conf})</label>
+                    <input type="range" id="${model.id}_conf_thresh" min="0.0" max="1.0" step="0.05" value="${model.conf}" oninput="updateSetting('conf', '${model.id}', this.value)">
+                `;
+
+                // Tạo Input Skip Frame
+                dynamicSettings.innerHTML += `
+                    <label for="${model.id}_skip_frames">${model.name} Skip Frames (${model.skip})</label>
+                    <input type="range" id="${model.id}_skip_frames" min="1" max="30" step="1" value="${model.skip}" oninput="updateSetting('skip', '${model.id}', this.value)">
+                `;
+            });
+            
+            // Khởi tạo các Draw settings từ HTML attributes
+            for (const key in drawSettings) {
+                const slider = document.getElementById(key);
+                if(slider) {
+                    drawSettings[key] = slider.classList.contains('checked');
+                }
+            }
+        }
+
+        // --- HÀM ĐIỀU KHIỂN & TRẠNG THÁI ---
+
+        function getSettings() {
+            let settings = {};
+            models.forEach(model => {
+                settings[`${model.id}_conf_thresh`] = model.conf;
+                settings[`${model.id}_skip_frames`] = model.skip;
+                settings[`model_${model.id}_enabled`] = model.enabled;
+            });
+            
+            // Thêm các cài đặt vẽ
+            Object.assign(settings, drawSettings);
+            return settings;
+        }
+
+        async function sendCommand(action) {
+            if (!isVideoUploaded && action !== 'reset') {
+                alert("Vui lòng upload video trước!");
+                return;
+            }
+            
+            systemStatus.textContent = `Trạng thái: Gửi lệnh ${action}...`;
+
+            const settings = getSettings();
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action, settings: settings })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    systemStatus.textContent = `Trạng thái: ${data.message}`;
+                    updateControlState(action);
+                } else {
+                    alert('Lỗi điều khiển: ' + data.message);
+                    systemStatus.textContent = `Trạng thái: LỖI! ${data.message}`;
+                }
+            } catch (error) {
+                console.error('Lỗi khi gửi lệnh:', error);
+                alert('Lỗi kết nối Backend.');
+                systemStatus.textContent = 'Trạng thái: LỖI KẾT NỐI!';
+            }
+        }
+        
+        function updateControlState(action) {
+            if (action === 'start' || action === 'continue') {
+                isTrackingRunning = true;
+                videoFeedImg.src = '/video_feed'; // Bắt đầu stream
+            } else if (action === 'stop') {
+                isTrackingRunning = false;
+            } else if (action === 'reset') {
+                isTrackingRunning = false;
+                isVideoUploaded = false;
+                videoFeedImg.style.display = 'none';
+                uploadBox.style.display = 'block';
+                systemStatus.textContent = 'Trạng thái: Đã reset, chờ video...';
+                videoFeedImg.src = ""; // Dừng stream
+            }
+        }
+
+        // --- HÀM TÙY CHỈNH CÀI ĐẶT ---
+        
+        function updateSetting(type, modelId, value) {
+            const model = models.find(m => m.id === modelId);
+            if (!model) return;
+
+            let labelText = '';
+            
+            if (type === 'conf') {
+                model.conf = parseFloat(value);
+                labelText = `Conf (${model.conf.toFixed(2)})`;
+            } else if (type === 'skip') {
+                model.skip = parseInt(value);
+                labelText = `Skip Frames (${model.skip})`;
+            }
+
+            // Cập nhật nhãn bên cạnh thanh trượt
+            const label = document.querySelector(`label[for="${modelId}_${type === 'conf' ? 'conf_thresh' : 'skip_frames'}"]`);
+            if (label) {
+                label.textContent = `${model.name} ${labelText}`;
+            }
+        }
+
+        function toggleModel(sliderElement, modelId) {
+            const model = models.find(m => m.id === modelId);
+            if (!model) return;
+            
+            model.enabled = !model.enabled;
+            sliderElement.classList.toggle('checked');
+            systemStatus.textContent = `Trạng thái: Đã thay đổi cấu hình. Vui lòng nhấn START lại.`;
+        }
+        
+        function toggleSetting(sliderElement) {
+            const settingId = sliderElement.id;
+            const isChecked = !sliderElement.classList.contains('checked');
+            
+            drawSettings[settingId] = isChecked;
+            sliderElement.classList.toggle('checked');
+            systemStatus.textContent = `Trạng thái: Đã thay đổi cấu hình. Vui lòng nhấn START lại.`;
+        }
+
+        // --- HÀM UPLOAD VIDEO ---
+
+        async function uploadVideo(file) {
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('video', file);
+            
+            document.getElementById('upload-status').textContent = `Đang Upload: ${file.name}...`;
+            systemStatus.textContent = 'Trạng thái: Đang Upload video...';
+
+            try {
+                const response = await fetch(UPLOAD_URL, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    isVideoUploaded = true;
+                    document.getElementById('upload-status').textContent = `Video: ${data.filename}`;
+                    uploadBox.style.display = 'none';
+                    videoFeedImg.style.display = 'block';
+                    systemStatus.textContent = 'Trạng thái: Upload thành công. Sẵn sàng Start.';
+                } else {
+                    alert('Lỗi Upload: ' + data.message);
+                    document.getElementById('upload-status').textContent = `Lỗi: ${data.message}`;
+                    systemStatus.textContent = 'Trạng thái: Lỗi Upload.';
+                }
+            } catch (error) {
+                console.error('Lỗi Upload:', error);
+                alert('Lỗi kết nối hoặc xử lý file.');
+                document.getElementById('upload-status').textContent = 'Lỗi kết nối Backend.';
+                systemStatus.textContent = 'Trạng thái: Lỗi kết nối Backend.';
+            }
+        }
+        
+        // Khởi tạo giao diện khi tải xong
+        window.onload = initSidebar;
+
+    </script>
+</body>
+</html>
