@@ -1,0 +1,35 @@
+version: '3.12'
+
+services:
+  pose_tracker:
+    # Chỉ định Dockerfile để xây dựng image
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    # Đặt tên container để dễ quản lý
+    container_name: pose_tracker_app
+    
+    # Ánh xạ cổng: host_port:container_port
+    # Truy cập ứng dụng qua http://localhost:5000
+    ports:
+      - "5000:5000"
+      
+    # Chia sẻ thư mục uploads giữa host và container.
+    # Điều này cho phép ứng dụng Flask lưu file video vào thư mục uploads
+    # và container có thể truy cập chúng.
+    volumes:
+      - ./uploads:/app/uploads
+      
+    # Nếu bạn có GPU và đã cài đặt Docker Engine với NVIDIA Container Toolkit:
+    # Bỏ comment 3 dòng sau để kích hoạt hỗ trợ GPU (cần cho hiệu năng YOLOv8)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+           
+    # Khởi động lại nếu container bị lỗi
+    restart: always
