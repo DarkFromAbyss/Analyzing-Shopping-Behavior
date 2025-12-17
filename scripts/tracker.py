@@ -1,69 +1,82 @@
-# scripts/tracker.py
-
-import cv2
 import numpy as np
-from typing import List, Tuple, Any
 
-# --- CÁC HẰNG SỐ CHỈ SỐ KEYPOINT CỦA POSE MODEL ---
-# NOTE: Cần trùng khớp với chỉ số Keypoint của mô hình YOLOv8 Pose
 SKELETON_CONNECTIONS = [
-    (15, 13), (13, 11), (16, 14), (14, 12), (11, 12),
-    (5, 11), (6, 12), (5, 6), (5, 7), (6, 8), (7, 9), (8, 10),
-    (1, 2), (0, 1), (0, 2), (3, 1), (4, 2)
+    (0, 1), (0, 2), (1, 3), (2, 4), (5, 6), (5, 7), (7, 9), (6, 8), 
+    (8, 10), (5, 11), (6, 12), (11, 12), (11, 13), (13, 15), (12, 14), (14, 16)
 ]
 
-
 class KalmanFilterBox:
-    """Bộ lọc Kalman cho Bounding Box [x, y, w, h] - Dùng để làm mịn và dự đoán Bbox."""
     def __init__(self):
-        # 8 trạng thái (x, y, w, h, vx, vy, vw, vh), 4 đo lường (x, y, w, h)
-        self.kf = cv2.KalmanFilter(8, 4) 
-        dt = 1.0
-        self.kf.transitionMatrix = np.array([
-            [1, 0, 0, 0, dt, 0, 0, 0], [0, 1, 0, 0, 0, dt, 0, 0],
-            [0, 0, 1, 0, 0, 0, dt, 0], [0, 0, 0, 1, 0, 0, 0, dt],
-            [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 0, 0, 1]
-        ], np.float32)
-        self.kf.measurementMatrix = np.array([
-            [1, 0, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0, 0, 0]
-        ], np.float32)
-        # Thiết lập ma trận nhiễu quá trình và đo lường
-        self.kf.processNoiseCov = np.diag([1e-2] * 8, k=0).astype(np.float32)
-        self.kf.measurementNoiseCov = np.diag([1e-1] * 4, k=0).astype(np.float32)
-        self.kf.errorCovPost = np.eye(8, dtype=np.float32) * 1
+        # State: [cx, cy, a, h, vx, vy, va, vh]
+        self._motion_mat = np.eye(8)
+        for i in range(4):
+            self._motion_mat[i, i + 4] = 1
+        
+        self._update_mat = np.eye(4, 8)
+        self._std_weight_position = 1. / 20
+        self._std_weight_velocity = 1. / 160
+        
+        self.mean = None
+        self.covariance = None
 
-    def initiate(self, bbox: List[int]):
-        """Khởi tạo trạng thái ban đầu của Kalman Filter bằng Bbox."""
-        x, y, w, h = self._xyxy_to_xywh(bbox)
-        self.kf.statePost = np.array([x, y, w, h, 0., 0., 0., 0.], np.float32).reshape(-1, 1)
+    def initiate(self, measurement_xyxy):
+        cx, cy, a, h = self._xyxy_to_cxcyah(measurement_xyxy)
+        self.mean = np.zeros(8)
+        self.mean[:4] = [cx, cy, a, h]
+        
+        std = [
+            2 * self._std_weight_position * h, 2 * self._std_weight_position * h, 1e-2, 2 * self._std_weight_position * h,
+            10 * self._std_weight_velocity * h, 10 * self._std_weight_velocity * h, 1e-5, 10 * self._std_weight_velocity * h
+        ]
+        self.covariance = np.diag(np.square(std))
 
-    def predict(self) -> List[int]:
-        """Dự đoán trạng thái Bbox tiếp theo."""
-        predicted = self.kf.predict()
-        return self._xywh_to_xyxy(predicted[:4].flatten())
+    def predict(self):
+        h = self.mean[3]
+        std_q = [
+            self._std_weight_position * h, self._std_weight_position * h, 1e-2, self._std_weight_position * h,
+            self._std_weight_velocity * h, self._std_weight_velocity * h, 1e-5, self._std_weight_velocity * h
+        ]
+        Q = np.diag(np.square(std_q))
+        self.mean = np.dot(self._motion_mat, self.mean)
+        self.covariance = np.linalg.multi_dot([self._motion_mat, self.covariance, self._motion_mat.T]) + Q
+        return self._cxcyah_to_xyxy(self.mean[:4])
 
-    def update(self, bbox: List[int]) -> List[int]:
-        """Cập nhật trạng thái Bbox dựa trên đo lường mới."""
-        measurement = np.array(self._xyxy_to_xywh(bbox), np.float32).reshape(-1, 1)
-        corrected = self.kf.correct(measurement)
-        return self._xywh_to_xyxy(corrected[:4].flatten())
+    def project(self):
+        h = self.mean[3]
+        std_r = [self._std_weight_position * h, self._std_weight_position * h, 1e-1, self._std_weight_position * h]
+        R = np.diag(np.square(std_r))
+        projected_mean = np.dot(self._update_mat, self.mean)
+        projected_cov = np.linalg.multi_dot([self._update_mat, self.covariance, self._update_mat.T]) + R
+        return projected_mean, projected_cov
 
-    def _xyxy_to_xywh(self, bbox: List[int]) -> List[float]:
-        """Chuyển đổi từ [x1, y1, x2, y2] sang [x_center, y_center, width, height]."""
-        x1, y1, x2, y2 = bbox
-        w = x2 - x1
-        h = y2 - y1
-        x_c = x1 + w / 2
-        y_c = y1 + h / 2
-        return [x_c, y_c, w, h]
+    def gating_distance(self, measurement_xyxy):
+        cx, cy, a, h = self._xyxy_to_cxcyah(measurement_xyxy)
+        z = np.array([cx, cy, a, h])
+        projected_mean, projected_cov = self.project()
+        cholesky_factor = np.linalg.cholesky(projected_cov)
+        d = z - projected_mean
+        z_score = np.linalg.solve(cholesky_factor, d)
+        return np.sum(z_score**2)
 
-    def _xywh_to_xyxy(self, xywh: np.ndarray) -> List[int]:
-        """Chuyển đổi từ [x_center, y_center, width, height] sang [x1, y1, x2, y2]."""
-        x_c, y_c, w, h = xywh
-        x1 = x_c - w / 2
-        y1 = y_c - h / 2
-        x2 = x_c + w / 2
-        y2 = y_c + h / 2
-        return [int(round(val)) for val in [x1, y1, x2, y2]]
+    def update(self, measurement_xyxy):
+        cx, cy, a, h = self._xyxy_to_cxcyah(measurement_xyxy)
+        z = np.array([cx, cy, a, h])
+        projected_mean, projected_cov = self.project()
+        L = np.linalg.cholesky(projected_cov)
+        K = np.linalg.multi_dot([self.covariance, self._update_mat.T, np.linalg.inv(L).T, np.linalg.inv(L)])
+        innovation = z - projected_mean
+        self.mean = self.mean + np.dot(K, innovation)
+        self.covariance = self.covariance - np.linalg.multi_dot([K, self._update_mat, self.covariance])
+
+    def get_rect(self):
+        if self.mean is None: return [0, 0, 0, 0]
+        return self._cxcyah_to_xyxy(self.mean[:4])
+
+    def _xyxy_to_cxcyah(self, xyxy):
+        w, h = max(0, xyxy[2]-xyxy[0]), max(0, xyxy[3]-xyxy[1])
+        return xyxy[0]+w/2, xyxy[1]+h/2, w/(h+1e-6), h
+
+    def _cxcyah_to_xyxy(self, cxcyah):
+        cx, cy, a, h = cxcyah
+        w = a * h
+        return [cx-w/2, cy-h/2, cx+w/2, cy+h/2]
