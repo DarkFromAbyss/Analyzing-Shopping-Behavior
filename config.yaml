@@ -10,6 +10,9 @@ MODELS:
   OBJECT_MODEL_NAME: 'models/yolo11n_object365.pt'  # Giả định mô hình Object Detection (Objects365/Custom)
   RISK_MODEL_NAME: 'models/best.pt'
 
+TRACKER: 
+  DEFAULT_TRACKER_CONFIG: "botsort_custom.yaml"
+
 THRESHOLDS:
   # Ngưỡng tin cậy (Confidence Thresholds) riêng cho từng mô hình
   DEFAULT_POSE_CONF: 0.6
