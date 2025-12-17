@@ -10,3 +10,4 @@ Flask
 flask-cors
 psycopg2
 scipy
+filterpy
