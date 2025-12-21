@@ -1,85 +1,109 @@
-# FINAL (Pose + Object + Behavior Tracking)
+# FINAL — Pose, Object & Behavior Tracking
 
-This repository contains a Flask-based video processing app that runs Ultralytics (YOLO) models for pose/object/risk detection, Kalman-based tracking and behavior classification.
+## Giới thiệu
 
-Contents
-- `app.py` - Flask web server and controller
-- `pose_tracker.py` - main pipeline for inference, tracking, drawing and streaming
-- `scripts/` - helper modules (`tracker.py`, `behavior.py`, `utils.py`)
-- `uploads/` - place to upload input videos
-- `models/` - (optional) pretrained model files (not included)
-- `requirements.txt` - Python dependencies
-- `Dockerfile` - Container build file (supports custom base image via build-arg)
+`FINAL` là một ứng dụng Flask để phân tích video (real-time hoặc offline) kết hợp ba thành phần chính: ước lượng pose, phát hiện vật thể và phân loại hành vi/rủi ro. Hệ thống sử dụng Ultralytics (YOLO) cho inference, Kalman filter cho tracking và logic hậu xử lý để suy luận tương tác giữa người và vật.
 
-Quick start (CPU)
-1. Build the image (CPU default):
+## Người sáng tác
 
-```bash
-docker build -t final-app .
-```
+- Author: Your Name (thay bằng tên thực tế)
+- Liên hệ / Repo: (thêm URL hoặc email nếu cần)
 
-2. Run the container (exposes port 5000):
+## Cấu trúc thư mục
 
-```bash
-docker run --rm -p 5000:5000 -v $(pwd)/uploads:/app/uploads final-app
-```
+- `app.py` — Flask server và các endpoint
+- `pose_tracker.py` — pipeline chính: inference, tracking, vẽ, streaming
+- `scripts/` — helper modules: `tracker.py`, `behavior.py`, `utils.py`
+- `models/` — lưu trọng số mô hình (không bao gồm)
+- `uploads/` — nơi lưu video được upload
+- `requirements.txt` — danh sách package Python
+- `Dockerfile` — file dựng image
+- `config.yaml` — cấu hình runtime (thresholds, skip frames, draw options)
 
-Quick start (GPU)
-- Choose an appropriate CUDA base image and build with `--build-arg`. Example (adjust tag for your GPU/CUDA):
+## Hướng dẫn cài đặt
 
-```bash
-docker build --build-arg BASE_IMAGE=nvidia/cuda:12.2.1-cudnn8-runtime-ubuntu22.04 -t final-app-gpu .
-```
-
-- Run with NVIDIA runtime (nvidia-container-toolkit must be installed):
-
-```bash
-docker run --gpus all --rm -p 5000:5000 -v $(pwd)/uploads:/app/uploads final-app-gpu
-```
-
-Notes on dependencies and GPU
-- `requirements.txt` lists main Python packages. For GPU builds you must ensure `torch` (if used by your models) is installed with CUDA support matching your base image. The `ultralytics` package will select device automatically if CUDA is available.
-- If you need a specific `torch` wheel, install it prior to other packages in the Dockerfile or replace the `pip install -r requirements.txt` step with explicit `pip install` commands for `torch` + `torchvision`.
-
-Running locally (no Docker)
-1. Create and activate a virtualenv (recommended):
+### Chạy local (virtualenv)
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate   # Linux/macOS
+source .venv/bin/activate   # Linux / macOS
 .venv\Scripts\activate     # Windows PowerShell
-```
-
-2. Install requirements:
-
-```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-3. Run the server:
+Chạy server:
 
 ```bash
 python app.py
+# mở http://localhost:5000
 ```
 
-Configuration
-- Edit `config.yaml` to set model paths, thresholds, drawing options and skip frames. The server reads it at startup.
-- You can pass `device` in the frontend `settings` payload to prefer `'cpu'` or `'cuda'`.
+### Chạy bằng Docker
 
-Project layout and runtime behavior
-- The Flask UI uploads a video to `uploads/` and starts a `VideoProcessor` thread which calls `process_video_stream` in `pose_tracker.py`.
-- `pose_tracker.py` loads three models (pose/object/risk), runs them according to `skip_frames` settings, updates Kalman trackers, computes interactions and draws results.
-- A side grid is rendered alongside the video to show recent hip-centroid trajectories and an average FPS is overlayed.
+CPU build:
 
-Recommendations for production
-- Use GPU for inference-heavy workloads; pin correct `torch` / CUDA versions.
-- Reduce model input resolution or increase skip frames to improve throughput.
-- Use a process manager (systemd / docker-compose) and mount persistent `models/` and `uploads/` directories.
+```bash
+docker build -t final-app .
+docker run --rm -p 5000:5000 -v $(pwd)/uploads:/app/uploads final-app
+```
 
-Troubleshooting
-- If models fail to load, check `config.yaml` model paths and ensure model files are present under `models/` or reachable via the paths.
-- For GPU issues, confirm `nvidia-smi` works on the host and the container is run with `--gpus all`.
+GPU build (ví dụ):
 
-License / Credits
-- (Add your project license and credits here)
-# FINAL
+```bash
+docker build --build-arg BASE_IMAGE=nvidia/cuda:12.2.1-cudnn8-runtime-ubuntu22.04 -t final-app-gpu .
+docker run --gpus all --rm -p 5000:5000 -v $(pwd)/uploads:/app/uploads final-app-gpu
+```
+
+> Lưu ý: với GPU hãy cài `torch` phù hợp với CUDA host; pin wheel trong Dockerfile để reproducible build.
+
+## Hướng dẫn truy cập
+
+- Mở trình duyệt: http://localhost:5000
+- Stream MJPEG: `/video_feed`
+
+## Hướng dẫn sử dụng
+
+1. Upload video bằng UI (hay copy file vào `uploads/`).
+2. Cấu hình (tuỳ chọn) các tham số confidence, skip frames và bật/tắt mô hình trong UI.
+3. Nhấn **Start** để xử lý; có thể **Stop**, **Continue**, **Reset**.
+4. Xem luồng đã xử lý: bounding boxes, nhãn hành vi, lưới bên phải hiện trajectory và `FPS(avg)`.
+
+`settings` ví dụ gửi tới `/control`:
+
+```json
+{
+  "pose_conf_thresh": 0.3,
+  "object_conf_thresh": 0.35,
+  "risk_conf_thresh": 0.4,
+  "pose_skip_frames": 2,
+  "object_skip_frames": 5,
+  "risk_skip_frames": 5,
+  "keypoint_draw": true,
+  "objects_draw": true,
+  "model_pose_enabled": true,
+  "model_object_enabled": true,
+  "model_risk_enabled": false,
+  "device": "cuda"   // or "cpu"
+}
+```
+
+## Cấu hình
+
+- Sửa `config.yaml` để trỏ tới mô hình và điều chỉnh thresholds/skip frames.
+- Thêm `device` trong payload `settings` để ép dùng `cpu` hoặc `cuda`.
+
+## Troubleshooting
+
+- Nếu Docker build lỗi do `psycopg2`, cài `libpq-dev` hoặc dùng `psycopg2-binary` trong `requirements.txt`.
+- Nếu mô hình không load: kiểm tra `config.yaml` và file model trong `models/`.
+- Nếu chậm: tăng `skip_frames`, giảm độ phân giải ảnh, hoặc chạy trên GPU.
+
+## Gợi ý phát triển
+
+- Pin `torch` wheel tương thích CUDA trong Dockerfile để build GPU ổn định.
+- Thêm test tự động và sample video trong `uploads/`.
+
+## License
+
+- Thêm license và credits tại đây.

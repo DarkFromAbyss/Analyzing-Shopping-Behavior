@@ -1,5 +1,7 @@
 import numpy as np
+from filterpy.kalman import KalmanFilter
 
+# Định nghĩa các mối nối xương (Skeleton connections)
 SKELETON_CONNECTIONS = [
     (0, 1), (0, 2), (1, 3), (2, 4), (5, 6), (5, 7), (7, 9), (6, 8), 
     (8, 10), (5, 11), (6, 12), (11, 12), (11, 13), (13, 15), (12, 14), (14, 16)
@@ -7,70 +9,88 @@ SKELETON_CONNECTIONS = [
 
 class KalmanFilterBox:
     def __init__(self):
-        # State: [cx, cy, a, h, vx, vy, va, vh]
-        self._motion_mat = np.eye(8)
-        for i in range(4):
-            self._motion_mat[i, i + 4] = 1
+        # 8 state variables (cx, cy, aspect_ratio, height, v_cx, v_cy, v_a, v_h)
+        # 4 measurement variables (cx, cy, aspect_ratio, height)
+        self.kf = KalmanFilter(dim_x=8, dim_z=4)
         
-        self._update_mat = np.eye(4, 8)
+        self.kf.F = np.eye(8)
+        for i in range(4):
+            self.kf.F[i, i + 4] = 1.0
+            
+        self.kf.H = np.eye(4, 8)
+
         self._std_weight_position = 1. / 20
         self._std_weight_velocity = 1. / 160
-        
-        self.mean = None
-        self.covariance = None
+
+        # Trạng thái theo dõi
+        self.time_since_update = 0 
+        self.history = [] 
+        self.hits = 0 
+        self.hit_streak = 0 
+        self.age = 0
 
     def initiate(self, measurement_xyxy):
         cx, cy, a, h = self._xyxy_to_cxcyah(measurement_xyxy)
-        self.mean = np.zeros(8)
-        self.mean[:4] = [cx, cy, a, h]
+        self.kf.x = np.zeros(8)
+        self.kf.x[:4] = [cx, cy, a, h]
         
         std = [
             2 * self._std_weight_position * h, 2 * self._std_weight_position * h, 1e-2, 2 * self._std_weight_position * h,
             10 * self._std_weight_velocity * h, 10 * self._std_weight_velocity * h, 1e-5, 10 * self._std_weight_velocity * h
         ]
-        self.covariance = np.diag(np.square(std))
+        self.kf.P = np.diag(np.square(std))
+        self.kf.Q = np.eye(8)
+        self.kf.R = np.eye(4)
+        self.time_since_update = 0
+        self.hits = 1
+        self.hit_streak = 1
+        self.age = 1
 
     def predict(self):
-        h = self.mean[3]
+        # Update process noise based on height
+        h = self.kf.x[3]
         std_q = [
             self._std_weight_position * h, self._std_weight_position * h, 1e-2, self._std_weight_position * h,
             self._std_weight_velocity * h, self._std_weight_velocity * h, 1e-5, self._std_weight_velocity * h
         ]
-        Q = np.diag(np.square(std_q))
-        self.mean = np.dot(self._motion_mat, self.mean)
-        self.covariance = np.linalg.multi_dot([self._motion_mat, self.covariance, self._motion_mat.T]) + Q
-        return self._cxcyah_to_xyxy(self.mean[:4])
-
-    def project(self):
-        h = self.mean[3]
-        std_r = [self._std_weight_position * h, self._std_weight_position * h, 1e-1, self._std_weight_position * h]
-        R = np.diag(np.square(std_r))
-        projected_mean = np.dot(self._update_mat, self.mean)
-        projected_cov = np.linalg.multi_dot([self._update_mat, self.covariance, self._update_mat.T]) + R
-        return projected_mean, projected_cov
-
-    def gating_distance(self, measurement_xyxy):
-        cx, cy, a, h = self._xyxy_to_cxcyah(measurement_xyxy)
-        z = np.array([cx, cy, a, h])
-        projected_mean, projected_cov = self.project()
-        cholesky_factor = np.linalg.cholesky(projected_cov)
-        d = z - projected_mean
-        z_score = np.linalg.solve(cholesky_factor, d)
-        return np.sum(z_score**2)
+        self.kf.Q = np.diag(np.square(std_q))
+        
+        if self.time_since_update > 0:
+            self.hit_streak = 0
+        self.time_since_update += 1
+        self.age += 1
+        
+        self.kf.predict()
+        return self._cxcyah_to_xyxy(self.kf.x[:4])
 
     def update(self, measurement_xyxy):
+        self.time_since_update = 0
+        self.history.append(self.kf.x)
+        self.hits += 1
+        self.hit_streak += 1
+        
         cx, cy, a, h = self._xyxy_to_cxcyah(measurement_xyxy)
         z = np.array([cx, cy, a, h])
-        projected_mean, projected_cov = self.project()
-        L = np.linalg.cholesky(projected_cov)
-        K = np.linalg.multi_dot([self.covariance, self._update_mat.T, np.linalg.inv(L).T, np.linalg.inv(L)])
-        innovation = z - projected_mean
-        self.mean = self.mean + np.dot(K, innovation)
-        self.covariance = self.covariance - np.linalg.multi_dot([K, self._update_mat, self.covariance])
+        
+        h_pred = self.kf.x[3]
+        std_r = [
+            self._std_weight_position * h_pred, 
+            self._std_weight_position * h_pred, 
+            1e-1, 
+            self._std_weight_position * h_pred
+        ]
+        self.kf.R = np.diag(np.square(std_r))
+        self.kf.update(z)
+
+    def get_current_state(self):
+        """
+        Lấy trạng thái hiện tại (đã được hiệu chỉnh bởi update).
+        Dùng cái này để vẽ sẽ chính xác hơn predict() khi đang track tốt.
+        """
+        return self._cxcyah_to_xyxy(self.kf.x[:4])
 
     def get_rect(self):
-        if self.mean is None: return [0, 0, 0, 0]
-        return self._cxcyah_to_xyxy(self.mean[:4])
+        return self._cxcyah_to_xyxy(self.kf.x[:4])
 
     def _xyxy_to_cxcyah(self, xyxy):
         w, h = max(0, xyxy[2]-xyxy[0]), max(0, xyxy[3]-xyxy[1])

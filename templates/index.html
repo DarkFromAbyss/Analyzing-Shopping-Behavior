@@ -1,299 +1,221 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <title>YOLO Pose Multi-Model Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopping Behavior Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        body { font-family: Arial, sans-serif; display: flex; height: 100vh; margin: 0; background-color: #f4f4f9; }
-        #sidebar { width: 300px; background-color: #333; color: white; padding: 20px; box-shadow: 2px 0 5px rgba(0,0,0,0.5); overflow-y: auto; }
-        #main-content { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
-        #video-container { width: 100%; max-width: 1200px; height: 70%; max-height: 800px; border: 2px dashed #ccc; display: flex; align-items: center; justify-content: center; position: relative; background-color: #eee; }
-        #video-feed { max-width: 100%; max-height: 100%; object-fit: contain; }
-        #upload-box { text-align: center; padding: 50px; cursor: pointer; }
-        .controls, .model-settings { margin-bottom: 20px; padding: 10px; border: 1px solid #555; border-radius: 5px; }
-        .controls button { width: 100%; padding: 10px; margin-top: 5px; cursor: pointer; border: none; border-radius: 4px; }
-        .controls #start-btn { background-color: #4CAF50; color: white; }
-        .controls #stop-btn { background-color: #f44336; color: white; }
-        .controls #continue-btn { background-color: #2196F3; color: white; }
-        .model-toggle { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .slider { width: 40px; height: 20px; background-color: #ccc; border-radius: 10px; position: relative; cursor: pointer; transition: background-color 0.4s; }
-        .slider.checked { background-color: #4CAF50; }
-        .slider:before { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background-color: white; top: 2px; left: 2px; transition: transform 0.4s; }
-        .slider.checked:before { transform: translateX(20px); }
-        .setting-group { margin-top: 10px; padding-left: 10px; border-left: 2px solid #777; }
-        .info-message { position: absolute; bottom: 10px; background-color: rgba(0, 0, 0, 0.7); color: white; padding: 5px 10px; border-radius: 5px; }
+        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; }
+        .sidebar { background-color: #1e293b; height: 100vh; border-right: 1px solid #334155; overflow-y: auto; padding: 20px; }
+        .sidebar-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .upload-area { border: 2px dashed #475569; border-radius: 10px; padding: 30px 10px; text-align: center; cursor: pointer; transition: 0.3s; margin-bottom: 20px; background-color: #0f172a; }
+        .upload-area:hover { border-color: #3b82f6; background-color: #1e293b; }
+        .btn-control { width: 100%; margin-bottom: 10px; font-weight: 600; padding: 10px; border-radius: 8px; border: none; }
+        .btn-start { background-color: #22c55e; color: white; }
+        .btn-stop { background-color: #ef4444; color: white; }
+        .settings-card { background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+        .settings-header { font-size: 0.95rem; font-weight: 600; margin-bottom: 10px; color: #f8fafc; border-bottom: 1px solid #334155; padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .form-label-sm { font-size: 0.8rem; color: #cbd5e1; margin-bottom: 2px; }
+        .form-control-sm, .form-range { accent-color: #3b82f6; }
+        .main-content { height: 100vh; padding: 0; display: flex; justify-content: center; align-items: center; background-color: #000; position: relative; }
+        #videoDisplay { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .placeholder-text { position: absolute; color: #64748b; text-align: center; }
     </style>
 </head>
 <body>
 
-    <div id="sidebar">
-        <h2>Bộ điều khiển Tracking</h2>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-3 col-lg-2 sidebar">
+            <div class="sidebar-title"><i class="fa-solid fa-cart-shopping"></i> Behavior AI</div>
 
-        <div class="controls">
-            <h3>Điều khiển</h3>
-            <button id="start-btn" onclick="sendCommand('start')">▶️ Start</button>
-            <button id="stop-btn" onclick="sendCommand('stop')">⏸️ Stop</button>
-            <button id="continue-btn" onclick="sendCommand('continue')">🔄 Continue</button>
-            <button id="reset-btn" onclick="sendCommand('reset')">🛑 Reset</button>
-        </div>
-        
-        <div class="model-settings">
-            <h3>Cấu hình Mô hình</h3>
-            
-            <div id="model-list">
-                </div>
-            
-            <div class="setting-group">
-                <h4>Ngưỡng và Skip Frame</h4>
-                <div id="dynamic-settings">
+            <div class="upload-area" id="dropArea">
+                <i class="fa-solid fa-cloud-arrow-up fa-2x mb-2 text-primary"></i>
+                <div class="upload-text">Upload Video</div>
+                <input type="file" id="videoInput" accept="video/*" hidden>
+            </div>
+            <div id="uploadStatus" class="text-center mb-3 text-success small" style="display:none;">
+                <i class="fa-solid fa-check-circle"></i> <span id="fileName"></span>
+            </div>
+
+            <button class="btn btn-control btn-start" id="btnStart" disabled><i class="fa-solid fa-play"></i> Start Tracking</button>
+            <button class="btn btn-control btn-stop" id="btnStop" disabled><i class="fa-solid fa-stop"></i> Finish Tracking</button>
+
+            <hr class="border-secondary">
+
+            <form id="settingsForm">
+                <div class="settings-card">
+                    <div class="settings-header">
+                        <span>YOLO Pose (Human)</span>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="model_pose_enabled" checked>
+                        </div>
                     </div>
-            </div>
+                    
+                    <div class="mb-2">
+                        <label class="form-label-sm">Confidence: <span id="val_pose">0.5</span></label>
+                        <input type="range" class="form-range" id="pose_conf_thresh" min="0.1" max="1.0" step="0.05" value="0.5" oninput="document.getElementById('val_pose').innerText=this.value">
+                    </div>
+                    
+                    <div class="row g-2 mb-2">
+                         <div class="col-6">
+                            <label class="form-label-sm">Skip Frames</label>
+                            <input type="number" class="form-control form-control-sm" id="pose_skip_frames" value="1" min="1">
+                        </div>
+                    </div>
 
-            <div class="setting-group">
-                <h4>Hiển thị Kết quả</h4>
-                <div class="model-toggle">
-                    <label>Vẽ Keypoint (Behavior)</label>
-                    <div class="slider checked" id="keypoint_draw" onclick="toggleSetting(this)"></div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="keypoint_draw" checked>
+                            <label class="form-check-label form-label-sm">Skeleton</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="draw_grid_enabled">
+                            <label class="form-check-label form-label-sm">Grid</label>
+                        </div>
+                    </div>
                 </div>
-                <div class="model-toggle">
-                    <label>Vẽ Object Detection</label>
-                    <div class="slider checked" id="objects_draw" onclick="toggleSetting(this)"></div>
+
+                <div class="settings-card">
+                    <div class="settings-header">
+                        <span>Object365 (Items)</span>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="model_object_enabled" checked>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <label class="form-label-sm">Confidence: <span id="val_obj">0.5</span></label>
+                        <input type="range" class="form-range" id="object_conf_thresh" min="0.1" max="1.0" step="0.05" value="0.5" oninput="document.getElementById('val_obj').innerText=this.value">
+                    </div>
+                    
+                     <div class="row g-2 mb-2">
+                         <div class="col-6">
+                            <label class="form-label-sm">Skip Frames</label>
+                            <input type="number" class="form-control form-control-sm" id="object_skip_frames" value="10" min="1">
+                        </div>
+                    </div>
+
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="objects_draw" checked>
+                        <label class="form-check-label form-label-sm">Draw Object Box</label>
+                    </div>
                 </div>
-                <div class="model-toggle">
-                    <label>Vẽ Bbox Risk riêng</label>
-                    <div class="slider" id="risk_draw_bbox" onclick="toggleSetting(this)"></div>
+
+                <div class="settings-card">
+                    <div class="settings-header">
+                        <span>Risk Model (Theft)</span>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="model_risk_enabled" checked>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <label class="form-label-sm">Confidence: <span id="val_risk">0.5</span></label>
+                        <input type="range" class="form-range" id="risk_conf_thresh" min="0.1" max="1.0" step="0.05" value="0.5" oninput="document.getElementById('val_risk').innerText=this.value">
+                    </div>
+
+                     <div class="row g-2 mb-2">
+                         <div class="col-6">
+                            <label class="form-label-sm">Skip Frames</label>
+                            <input type="number" class="form-control form-control-sm" id="risk_skip_frames" value="10" min="1">
+                        </div>
+                    </div>
+
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="risk_draw_bbox" checked>
+                        <label class="form-check-label form-label-sm">Draw Risk Box</label>
+                    </div>
                 </div>
-                <div class="model-toggle">
-                    <label>Vẽ Keypoint Risk</label>
-                    <div class="slider checked" id="risk_draw_keypoint" onclick="toggleSetting(this)"></div>
-                </div>
+            </form>
+        </div>
+
+        <div class="col-md-9 col-lg-10 main-content">
+            <div class="placeholder-text" id="placeholder">
+                <i class="fa-solid fa-video fa-3x mb-3"></i><br>
+                Video Output Area<br>
+                Upload & Start to view
             </div>
-            
+            <img id="videoDisplay" src="" style="display:none;" alt="Processed Video Stream">
         </div>
     </div>
+</div>
 
-    <div id="main-content">
-        <h1>Video Tracking Output</h1>
-        <div id="video-container">
-            <input type="file" id="video-upload" style="display: none;" accept="video/*" onchange="uploadVideo(this.files[0])">
-            
-            <div id="upload-box" onclick="document.getElementById('video-upload').click()">
-                <p>Drag & Drop video hoặc click để chọn file</p>
-                <p id="upload-status"></p>
-            </div>
-            
-            <img id="video-feed" style="display: none;">
-            
-            <div class="info-message" id="system-status">Trạng thái: Đang chờ video...</div>
-        </div>
-    </div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const dropArea = document.getElementById('dropArea');
+    const videoInput = document.getElementById('videoInput');
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+    const videoDisplay = document.getElementById('videoDisplay');
+    const placeholder = document.getElementById('placeholder');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const fileNameDisplay = document.getElementById('fileName');
 
-    <script>
-        const API_URL = '/control';
-        const UPLOAD_URL = '/upload';
-        
-        let models = [
-            { id: 'pose', name: 'Pose (Behavior/Tracking)', enabled: true, conf: 0.6, skip: 2, default_conf: 0.6, default_skip: 2 },
-            { id: 'object', name: 'Object (Interaction)', enabled: true, conf: 0.4, skip: 5, default_conf: 0.4, default_skip: 5 },
-            { id: 'risk', name: 'Risk (Suspicious)', enabled: true, conf: 0.7, skip: 10, default_conf: 0.7, default_skip: 10 }
-        ];
+    let isTracking = false;
 
-        let drawSettings = {
-            keypoint_draw: false, // Default: FALSE trong Python, nhưng để checked trong HTML
-            objects_draw: true,
-            risk_draw_bbox: false,
-            risk_draw_keypoint: true
+    dropArea.addEventListener('click', () => videoInput.click());
+    dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.style.borderColor = '#3b82f6'; });
+    dropArea.addEventListener('dragleave', () => { dropArea.style.borderColor = '#475569'; });
+    dropArea.addEventListener('drop', (e) => { e.preventDefault(); dropArea.style.borderColor = '#475569'; if(e.dataTransfer.files.length) handleFiles(e.dataTransfer.files[0]); });
+    videoInput.addEventListener('change', () => { if(videoInput.files.length) handleFiles(videoInput.files[0]); });
+
+    function handleFiles(file) {
+        const formData = new FormData(); formData.append('video', file);
+        dropArea.innerHTML = '<div class="spinner-border text-primary" role="status"></div><div class="mt-2">Uploading...</div>';
+        fetch('/upload', { method: 'POST', body: formData }).then(r=>r.json()).then(data => {
+            dropArea.innerHTML = '<i class="fa-solid fa-cloud-arrow-up fa-2x mb-2 text-primary"></i><div class="upload-text">Change Video</div>';
+            if (data.success) {
+                uploadStatus.style.display = 'block'; fileNameDisplay.innerText = data.filename; btnStart.disabled = false;
+            } else alert(data.message);
+        }).catch(e => { console.error(e); dropArea.innerHTML = 'Error Uploading'; });
+    }
+
+    function getSettings() {
+        return {
+            pose_conf_thresh: parseFloat(document.getElementById('pose_conf_thresh').value),
+            pose_skip_frames: parseInt(document.getElementById('pose_skip_frames').value),
+            model_pose_enabled: document.getElementById('model_pose_enabled').checked,
+            keypoint_draw: document.getElementById('keypoint_draw').checked,
+            draw_grid: document.getElementById('draw_grid_enabled').checked,
+
+            object_conf_thresh: parseFloat(document.getElementById('object_conf_thresh').value),
+            object_skip_frames: parseInt(document.getElementById('object_skip_frames').value),
+            model_object_enabled: document.getElementById('model_object_enabled').checked,
+            objects_draw: document.getElementById('objects_draw').checked,
+
+            risk_conf_thresh: parseFloat(document.getElementById('risk_conf_thresh').value),
+            risk_skip_frames: parseInt(document.getElementById('risk_skip_frames').value),
+            model_risk_enabled: document.getElementById('model_risk_enabled').checked,
+            risk_draw_bbox: document.getElementById('risk_draw_bbox').checked
         };
+    }
 
-        let isVideoUploaded = false;
-        let isTrackingRunning = false;
-        const videoFeedImg = document.getElementById('video-feed');
-        const uploadBox = document.getElementById('upload-box');
-        const systemStatus = document.getElementById('system-status');
+    btnStart.addEventListener('click', () => {
+        const settings = getSettings();
+        fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start', settings: settings }) })
+        .then(res => res.json()).then(data => {
+            if (data.success) {
+                isTracking = true; btnStart.disabled = true; btnStop.disabled = false;
+                placeholder.style.display = 'none'; videoDisplay.style.display = 'block';
+                videoDisplay.src = "/video_feed?t=" + new Date().getTime();
+            } else alert(data.message);
+        });
+    });
 
-        // --- HÀM KHỞI TẠO ---
-
-        function initSidebar() {
-            const modelList = document.getElementById('model-list');
-            const dynamicSettings = document.getElementById('dynamic-settings');
-
-            models.forEach(model => {
-                // Tạo Toggle
-                modelList.innerHTML += `
-                    <div class="model-toggle">
-                        <label>${model.name}</label>
-                        <div class="slider ${model.enabled ? 'checked' : ''}" id="model_${model.id}_enabled" onclick="toggleModel(this, '${model.id}')"></div>
-                    </div>
-                `;
-
-                // Tạo Input Ngưỡng (Conf)
-                dynamicSettings.innerHTML += `
-                    <label for="${model.id}_conf_thresh">${model.name} Conf (${model.conf})</label>
-                    <input type="range" id="${model.id}_conf_thresh" min="0.0" max="1.0" step="0.05" value="${model.conf}" oninput="updateSetting('conf', '${model.id}', this.value)">
-                `;
-
-                // Tạo Input Skip Frame
-                dynamicSettings.innerHTML += `
-                    <label for="${model.id}_skip_frames">${model.name} Skip Frames (${model.skip})</label>
-                    <input type="range" id="${model.id}_skip_frames" min="1" max="30" step="1" value="${model.skip}" oninput="updateSetting('skip', '${model.id}', this.value)">
-                `;
-            });
-            
-            // Khởi tạo các Draw settings từ HTML attributes
-            for (const key in drawSettings) {
-                const slider = document.getElementById(key);
-                if(slider) {
-                    drawSettings[key] = slider.classList.contains('checked');
-                }
+    btnStop.addEventListener('click', () => {
+        fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reset' }) })
+        .then(res => res.json()).then(data => {
+            if (data.success) {
+                isTracking = false; btnStart.disabled = false; btnStop.disabled = true;
+                videoDisplay.src = ""; videoDisplay.style.display = 'none'; placeholder.style.display = 'block';
+                placeholder.innerHTML = '<i class="fa-solid fa-check fa-3x mb-3 text-success"></i><br>Tracking Finished';
             }
-        }
-
-        // --- HÀM ĐIỀU KHIỂN & TRẠNG THÁI ---
-
-        function getSettings() {
-            let settings = {};
-            models.forEach(model => {
-                settings[`${model.id}_conf_thresh`] = model.conf;
-                settings[`${model.id}_skip_frames`] = model.skip;
-                settings[`model_${model.id}_enabled`] = model.enabled;
-            });
-            
-            // Thêm các cài đặt vẽ
-            Object.assign(settings, drawSettings);
-            return settings;
-        }
-
-        async function sendCommand(action) {
-            if (!isVideoUploaded && action !== 'reset') {
-                alert("Vui lòng upload video trước!");
-                return;
-            }
-            
-            systemStatus.textContent = `Trạng thái: Gửi lệnh ${action}...`;
-
-            const settings = getSettings();
-            
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: action, settings: settings })
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    systemStatus.textContent = `Trạng thái: ${data.message}`;
-                    updateControlState(action);
-                } else {
-                    alert('Lỗi điều khiển: ' + data.message);
-                    systemStatus.textContent = `Trạng thái: LỖI! ${data.message}`;
-                }
-            } catch (error) {
-                console.error('Lỗi khi gửi lệnh:', error);
-                alert('Lỗi kết nối Backend.');
-                systemStatus.textContent = 'Trạng thái: LỖI KẾT NỐI!';
-            }
-        }
-        
-        function updateControlState(action) {
-            if (action === 'start' || action === 'continue') {
-                isTrackingRunning = true;
-                videoFeedImg.src = '/video_feed'; // Bắt đầu stream
-            } else if (action === 'stop') {
-                isTrackingRunning = false;
-            } else if (action === 'reset') {
-                isTrackingRunning = false;
-                isVideoUploaded = false;
-                videoFeedImg.style.display = 'none';
-                uploadBox.style.display = 'block';
-                systemStatus.textContent = 'Trạng thái: Đã reset, chờ video...';
-                videoFeedImg.src = ""; // Dừng stream
-            }
-        }
-
-        // --- HÀM TÙY CHỈNH CÀI ĐẶT ---
-        
-        function updateSetting(type, modelId, value) {
-            const model = models.find(m => m.id === modelId);
-            if (!model) return;
-
-            let labelText = '';
-            
-            if (type === 'conf') {
-                model.conf = parseFloat(value);
-                labelText = `Conf (${model.conf.toFixed(2)})`;
-            } else if (type === 'skip') {
-                model.skip = parseInt(value);
-                labelText = `Skip Frames (${model.skip})`;
-            }
-
-            // Cập nhật nhãn bên cạnh thanh trượt
-            const label = document.querySelector(`label[for="${modelId}_${type === 'conf' ? 'conf_thresh' : 'skip_frames'}"]`);
-            if (label) {
-                label.textContent = `${model.name} ${labelText}`;
-            }
-        }
-
-        function toggleModel(sliderElement, modelId) {
-            const model = models.find(m => m.id === modelId);
-            if (!model) return;
-            
-            model.enabled = !model.enabled;
-            sliderElement.classList.toggle('checked');
-            systemStatus.textContent = `Trạng thái: Đã thay đổi cấu hình. Vui lòng nhấn START lại.`;
-        }
-        
-        function toggleSetting(sliderElement) {
-            const settingId = sliderElement.id;
-            const isChecked = !sliderElement.classList.contains('checked');
-            
-            drawSettings[settingId] = isChecked;
-            sliderElement.classList.toggle('checked');
-            systemStatus.textContent = `Trạng thái: Đã thay đổi cấu hình. Vui lòng nhấn START lại.`;
-        }
-
-        // --- HÀM UPLOAD VIDEO ---
-
-        async function uploadVideo(file) {
-            if (!file) return;
-
-            const formData = new FormData();
-            formData.append('video', file);
-            
-            document.getElementById('upload-status').textContent = `Đang Upload: ${file.name}...`;
-            systemStatus.textContent = 'Trạng thái: Đang Upload video...';
-
-            try {
-                const response = await fetch(UPLOAD_URL, {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    isVideoUploaded = true;
-                    document.getElementById('upload-status').textContent = `Video: ${data.filename}`;
-                    uploadBox.style.display = 'none';
-                    videoFeedImg.style.display = 'block';
-                    systemStatus.textContent = 'Trạng thái: Upload thành công. Sẵn sàng Start.';
-                } else {
-                    alert('Lỗi Upload: ' + data.message);
-                    document.getElementById('upload-status').textContent = `Lỗi: ${data.message}`;
-                    systemStatus.textContent = 'Trạng thái: Lỗi Upload.';
-                }
-            } catch (error) {
-                console.error('Lỗi Upload:', error);
-                alert('Lỗi kết nối hoặc xử lý file.');
-                document.getElementById('upload-status').textContent = 'Lỗi kết nối Backend.';
-                systemStatus.textContent = 'Trạng thái: Lỗi kết nối Backend.';
-            }
-        }
-        
-        // Khởi tạo giao diện khi tải xong
-        window.onload = initSidebar;
-
-    </script>
+        });
+    });
+</script>
 </body>
 </html>

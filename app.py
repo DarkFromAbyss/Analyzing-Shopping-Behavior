@@ -157,12 +157,16 @@ def control():
                 'model_pose_enabled': settings.get('model_pose_enabled', True),
                 'model_object_enabled': settings.get('model_object_enabled', True),
                 'model_risk_enabled': settings.get('model_risk_enabled', True),
+                
+                'draw_grid': settings.get('draw_grid', False)
             }
 
             video_processor.start()
             is_running = True
             
-            processing_thread = threading.Thread(target=video_processor.run, args=(current_settings,), daemon=True)
+            processing_thread = threading.Thread(target=video_processor.run, 
+                                                 args=(current_settings,), 
+                                                 daemon=True)
             processing_thread.start()
             return jsonify({'success': True, 'message': 'Bắt đầu xử lý.'})
         
