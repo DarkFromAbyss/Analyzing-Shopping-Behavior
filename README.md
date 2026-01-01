@@ -1,4 +1,4 @@
-# FINAL — Pose, Object & Behavior Tracking
+vieets # FINAL — Pose, Object & Behavior Tracking
 
 **Project name:** FINAL
 
@@ -41,7 +41,7 @@ Lưu ý: các con số trên là ước lượng; hiệu năng thực tế phụ
 - `models/` — chứa trọng số mô hình
 - `uploads/` — video input
 
-## Hướng dẫn cài đặt
+## Cài đặt (không dùng Docker)
 
 1. Tạo virtualenv và cài dependencies:
 
@@ -52,13 +52,24 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-2. (Tùy chọn) Chuẩn bị mô hình: sao chép file trọng số vào `models/` (ví dụ `best.pt`).
+2. Chuẩn bị mô hình: sao chép file trọng số vào `models/` (ví dụ `best.pt`, `yolo11n_object365.pt`, `yolo11n-pose.pt`).
 
-3. Kiểm tra `config.yaml` để điều chỉnh thresholds, skip frames, và `device`.
+3. Cấu hình:
 
-## Hướng dẫn chạy
+- Mở `config.yaml` để thiết lập `REDIS.HOST/PORT/DB` và các `FRAME_KEY` nếu cần.
+- Nếu chạy Redis trên máy local dùng WSL hoặc native, để `REDIS.HOST: 127.0.0.1`; nếu dùng container, đổi thành `redis`.
 
-- Chạy local (CPU/GPU nếu PyTorch cài và CUDA sẵn):
+4. Kiểm tra môi trường:
+
+```powershell
+python -c "import sys, torch; print('Python', sys.version); print('Torch', getattr(torch, '__version__', 'not installed'))"
+```
+
+## Chạy (không dùng Docker)
+
+1. Bật Redis (nếu sử dụng Redis): theo hướng dẫn phần Redis ở dưới hoặc chạy `redis-server`.
+
+2. Khởi chạy server Flask:
 
 ```powershell
 set FLASK_ENV=production
@@ -66,19 +77,56 @@ python app.py
 # Mở http://localhost:5000
 ```
 
-- Chạy Docker (CPU):
+3. Upload video qua UI hoặc copy file vào `uploads/` rồi dùng API `/control` để start.
 
-```powershell
+## Cài đặt (Docker)
+
+1. Cài Docker (và Docker Compose nếu chưa có). Nếu muốn GPU, cài NVIDIA Container Toolkit và driver tương thích.
+
+2. (Tuỳ chọn) Chỉnh `docker-compose.yaml`:
+
+- Mình đã thêm service `redis` và volume `redis-data` sẵn vào `docker-compose.yaml`.
+- Nếu muốn khởi động với hỗ trợ GPU, cấu hình service `pose_tracker` để dùng runtime NVIDIA (tham khảo comment trong file).
+
+3. Build image (không dùng compose):
+
+```bash
 docker build -t final-app .
+```
+
+## Chạy (Docker)
+
+- Với Docker Compose (khuyến nghị, sẽ start cả Redis + app):
+
+```bash
+docker compose up -d
+```
+
+- Kiểm tra trạng thái:
+
+```bash
+docker ps
+docker logs final_redis
+docker exec -it final_redis redis-cli ping
+```
+
+- Chạy chỉ container app (không dùng compose):
+
+```bash
 docker run --rm -p 5000:5000 -v %cd%/uploads:/app/uploads final-app
 ```
 
-- Chạy Docker (GPU):
+- GPU (nếu image build cho GPU và host có NVIDIA):
 
-```powershell
-docker build --build-arg BASE_IMAGE=nvidia/cuda:12.2.1-cudnn8-runtime-ubuntu22.04 -t final-app-gpu .
+```bash
 docker run --gpus all --rm -p 5000:5000 -v %cd%/uploads:/app/uploads final-app-gpu
 ```
+
+## Ghi chú thêm
+
+- Nếu dùng Docker Compose và Redis service, đặt `REDIS.HOST` trong `config.yaml` là `redis` (tên service), không phải `127.0.0.1`.
+- Luôn kiểm tra logs (`docker logs pose_tracker_app`) nếu không thấy UI hoạt động.
+
 
 ## API & UI
 
@@ -163,6 +211,31 @@ redis-cli ping
 docker run -d --name final-redis -p 6379:6379 redis:7
 docker exec -it final-redis redis-cli ping
 ```
+
+2a) Windows + WSL (Ubuntu) — cài WSL và Redis
+
+Nếu bạn đang dùng Windows, khuyến nghị cài WSL2 và chạy Redis trong một distro Ubuntu để môi trường giống Linux:
+
+```powershell
+# 1) Mở PowerShell (Admin) và cài WSL + Ubuntu (Windows 10/11, build mới):
+wsl --install -d ubuntu
+# Nếu lệnh trên không có sẵn, tham khảo: https://learn.microsoft.com/windows/wsl/install
+
+# 2) Mở Ubuntu (từ Start menu) và cập nhật hệ thống:
+sudo apt update && sudo apt upgrade -y
+
+# 3) Cài Redis:
+sudo apt install redis-server -y
+
+# 4) Bật Redis và kiểm tra:
+sudo systemctl enable --now redis-server
+redis-cli ping  # -> PONG
+```
+
+Lưu ý:
+- Trên hệ thống Windows + WSL2 mới, `localhost:6379` từ Windows thường được forward tới dịch vụ trong WSL — bạn có thể để `REDIS.HOST: 127.0.0.1` trong `config.yaml`.
+- Nếu không thể kết nối từ Windows, bạn có thể kiểm tra IP của WSL: `wsl hostname -I` và dùng IP đó trong `config.yaml`, hoặc chạy `redis-cli` bên trong WSL để xác thực.
+- Để cho phép truy cập từ host (không chỉ localhost), chỉnh `/etc/redis/redis.conf` và đổi `bind 127.0.0.1` thành `bind 0.0.0.0` rồi `sudo systemctl restart redis-server` (chú ý bảo mật — nên cấu hình `requirepass` nếu mở cổng).
 
 2) Docker Compose mẫu
 
