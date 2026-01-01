@@ -33,3 +33,14 @@ services:
            
     # Khởi động lại nếu container bị lỗi
     restart: always
+  redis:
+    image: redis:7
+    container_name: final_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

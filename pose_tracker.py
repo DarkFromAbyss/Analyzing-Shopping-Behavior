@@ -34,7 +34,7 @@ class BehaviorTracker:
     def __init__(self, config_data: Dict[str, Any]):
         self.config = config_data
         self.device = 'cuda' if torch and torch.cuda.is_available() else 'cpu'
-        
+        self.output_scale = config_data.get('VIDEO_OUTPUT', {}).get('OUTPUT_SCALE', 1.0)
         # Load Models
         try:
             self.pose_model = YOLO(config_data['MODELS']['POSE_MODEL_NAME']).to(self.device)
@@ -299,9 +299,9 @@ class BehaviorTracker:
                     p_conf = self.last_pose_confs.get(tid, 0.0)
                     final_txt = f"ID:{tid}({p_conf:.2f})|{'+'.join(lbls)}"
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                    (txt_w, txt_h), _ = cv2.getTextSize(final_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+                    (txt_w, txt_h), _ = cv2.getTextSize(final_txt, cv2.FONT_HERSHEY_DUPLEX, 0.8, 2)
                     cv2.rectangle(frame, (x1, y1 - txt_h - 10), (x1 + txt_w, y1), (0, 0, 0), -1) 
-                    cv2.putText(frame, final_txt, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    cv2.putText(frame, final_txt, (x1, y1 - 5), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 1)
                     if draw_kp and en_pose and kps: draw_skeleton(frame, kps, SKELETON_CONNECTIONS, self.LINE_COLOR, self.POINT_COLOR)
 
                 if draw_obj and en_obj:
@@ -309,7 +309,7 @@ class BehaviorTracker:
                         is_cab = (b[5] == self.config['BEHAVIOR']['CABINET_SHELF_ID'])
                         c = (255, 100, 0) if is_cab else (255, 255, 255)
                         cv2.rectangle(frame, (b[0], b[1]), (b[2], b[3]), c, 2)
-                        cv2.putText(frame, f"{'CABINET' if is_cab else 'ITEM'} {b[4]:.2f}", (b[0], b[1]-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, c, 1)
+                        cv2.putText(frame, f"{'CABINET' if is_cab else 'ITEM'} {b[4]:.2f}", (b[0], b[1]-5), cv2.FONT_HERSHEY_DUPLEX, 0.8, c, 1)
 
                 fps_curr = 1 / (time.time() - loop_start) if (time.time() - loop_start) > 0 else 0
                 self.fps_avg = 0.9 * self.fps_avg + 0.1 * fps_curr if self.fps_avg > 0 else fps_curr
@@ -326,6 +326,10 @@ class BehaviorTracker:
                 }
                 self._draw_dashboard(frame, metrics_data)
                 
+                
+                if self.output_scale != 1.0:    
+                    frame = cv2.resize(frame, (int(w_frame * self.output_scale), int(h_frame * self.output_scale))) 
+                    
                 yield frame
                 self.frame_count += 1
                 

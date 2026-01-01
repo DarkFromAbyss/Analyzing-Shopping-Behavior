@@ -1,8 +1,19 @@
 # config.yaml
 
-# ====================================================================
-# --- CẤU HÌNH MÔ HÌNH VÀ NGƯỠNG TIN CẬY
-# ====================================================================
+VIDEO_OUTPUT:
+  # Tỷ lệ kích thước video đầu ra.
+  # 1.0  : Giữ nguyên kích thước gốc (VD: 1920x1080)
+  # 0.5  : Giảm một nửa kích thước (VD: 960x540) -> Nhẹ hơn, stream mượt hơn
+  # 0.75 : Giảm còn 75%
+  OUTPUT_SCALE: 1.0
+  
+REDIS:
+  HOST: '127.0.0.1'  # Windows sẽ tự forward cái này vào WSL
+  PORT: 6379
+  DB: 0
+  FRAME_KEY: 'system:live_frame'
+  VIDEO_PATH_KEY: 'system:video_path'
+  STATUS_KEY: 'system:status'        # Key lưu trạng thái (running/stopped)
 
 MODELS:
   # Đường dẫn tới các file weights của mô hình
