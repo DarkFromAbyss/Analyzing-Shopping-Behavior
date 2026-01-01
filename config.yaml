@@ -25,8 +25,8 @@ THRESHOLDS:
 
 SKIP_FRAMES:
   # Tần suất xử lý (Skip Frames) mặc định
-  DEFAULT_POSE_SKIP: 2
-  DEFAULT_OBJECT_SKIP: 5
+  DEFAULT_POSE_SKIP: 3
+  DEFAULT_OBJECT_SKIP: 7
   DEFAULT_RISK_SKIP: 10
 
 # ====================================================================
@@ -35,7 +35,7 @@ SKIP_FRAMES:
 
 DRAWING:
   # Cấu hình Vẽ Mặc định
-  DEFAULT_OBJECTS_DRAW: True
+  DEFAULT_OBJECTS_DRAW: False
   DEFAULT_KEYPOINT_DRAW: False
   DEFAULT_RISK_DRAW_BBOX: False
   DEFAULT_RISK_DRAW_KEYPOINT: True

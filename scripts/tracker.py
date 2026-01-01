@@ -13,10 +13,12 @@ class KalmanFilterBox:
         # 4 measurement variables (cx, cy, aspect_ratio, height)
         self.kf = KalmanFilter(dim_x=8, dim_z=4)
         
+        # State transition matrix
         self.kf.F = np.eye(8)
         for i in range(4):
             self.kf.F[i, i + 4] = 1.0
-            
+        
+        # Measurement matrix
         self.kf.H = np.eye(4, 8)
 
         self._std_weight_position = 1. / 20

@@ -1,98 +1,153 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation, PillowWriter 
+import matplotlib.animation as animation
+from mpl_toolkits.mplot3d import Axes3D
 
-# --- 1. Thiết lập các thông số mô phỏng ---
+# --- CẤU HÌNH THÔNG SỐ ---
+GOC_NGHIENG_DO = 30
+THETA = np.radians(GOC_NGHIENG_DO)
+BAN_KINH_GIOI_HAN = 5.0
+SO_BUOC = 200
+KICH_THUOC_BUOC = 0.5  # Tăng bước nhảy một chút để thấy rõ chuyển động
+FPS = 20
+INTERVAL = 50
 
-# Hai đầu mút của đoạn thẳng
-DIEM_A = -5.0
-DIEM_B = 5.0
+# --- PHẦN 1: SINH DỮ LIỆU ---
 
-# Biên độ (Amplitude) của dao động
-BIEN_DO = (DIEM_B - DIEM_A) / 2
-# Vị trí cân bằng (Trung điểm)
-TRUNG_DIEM = (DIEM_A + DIEM_B) / 2
-
-# Thời gian mô phỏng (giây)
-THOI_GIAN_MAX = 8
-
-# Số chu kỳ dao động trong THOI_GIAN_MAX
-SO_CHU_KY = 2 
-# Tần số góc (Omega)
-TOC_DO_GOC_OMEGA = SO_CHU_KY * 2 * np.pi / THOI_GIAN_MAX
-
-# Số khung hình (frames) cho animation
-SO_KHUNG_HINH = 200
-thoi_gian = np.linspace(0, THOI_GIAN_MAX, SO_KHUNG_HINH) 
-
-# --- 2. Tính toán Vị trí của chất điểm theo thời gian ---
-
-# Sử dụng hàm cos để bắt đầu từ biên độ dương (DIEM_B)
-# Vị trí X(t) = Trung_điểm + Biên_độ * cos(omega * t)
-X_pos = TRUNG_DIEM + BIEN_DO * np.cos(TOC_DO_GOC_OMEGA * thoi_gian)
-
-# Giữ trục Y cố định để vẽ trên đường thẳng nằm ngang
-Y_pos = np.zeros_like(thoi_gian) 
-
-# --- 3. Thiết lập Hình vẽ 2D và Animation ---
-
-fig, ax = plt.subplots(figsize=(10, 3))
-ax.set_title(f'Animation Chất điểm Di chuyển Qua Lại giữa X={DIEM_A} và X={DIEM_B}')
-ax.set_xlabel('Trục X')
-ax.set_yticks([]) # Ẩn trục Y vì chuyển động chỉ là 1 chiều
-# ax.grid(True, axis='x', linestyle='--', alpha=0.7) # Chỉ hiển thị grid trên trục X
-
-# Vẽ đoạn thẳng cố định (đường tham chiếu)
-ax.hlines(0, DIEM_A, DIEM_B, color='black', linestyle='-', linewidth=2, label='Đoạn Thẳng')
-# Vẽ hai đầu mút
-ax.plot(DIEM_A, 0, 'go', markersize=10, label=f'Đầu A ({DIEM_A})')
-ax.plot(DIEM_B, 0, 'go', markersize=10, label=f'Đầu B ({DIEM_B})')
-
-# Cài đặt giới hạn trục X
-limit = BIEN_DO + 1.0 # Thêm khoảng trống hai bên
-ax.set_xlim([TRUNG_DIEM - limit, TRUNG_DIEM + limit])
-ax.set_ylim([-0.5, 0.5]) # Giới hạn trục Y nhỏ
-
-# Khởi tạo đường đi đã vẽ (Màu xanh lam, chỉ là đường thẳng 1 chiều)
-# Trong chuyển động 1 chiều, chúng ta thường chỉ vẽ điểm chuyển động
-# diem_vat_the, = ax.plot([], [], 'o', color='red', markersize=12, label='Chất điểm')
-
-# Khởi tạo điểm vật thể (màu đỏ)
-diem_vat_the, = ax.plot([], [], 'o', color='red', markersize=12, label='Chất điểm')
-
-# Thêm chú thích cho rõ ràng
-plt.legend(loc='upper right')
-
-# Hàm cập nhật khung hình
-def update(frame):
-    # Cập nhật vị trí X của chất điểm
-    x_current = X_pos[frame]
-    y_current = Y_pos[frame]
+# Sửa lỗi tên hàm: dùng dấu gạch dưới
+def sinh_quy_dao_ngau_nhien(r_gioi_han, n_buoc, buoc_max):
+    xp_list = [0.0]
+    yp_list = [0.0]
+    curr_x, curr_y = 0.0, 0.0
     
-    # Cập nhật điểm vật thể
-    diem_vat_the.set_data([x_current], [y_current])
+    np.random.seed(42) # Giữ seed để kết quả giống nhau mỗi lần chạy
+
+    for _ in range(n_buoc):
+        dx = np.random.randn() * buoc_max
+        dy = np.random.randn() * buoc_max
+        
+        next_x = curr_x + dx
+        next_y = curr_y + dy
+        
+        if np.sqrt(next_x**2 + next_y**2) < r_gioi_han:
+            curr_x, curr_y = next_x, next_y
+            
+        xp_list.append(curr_x)
+        yp_list.append(curr_y)
+        
+    return np.array(xp_list), np.array(yp_list)
+
+# Tạo dữ liệu
+print("1. Đang tính toán quỹ đạo...")
+xp_data, yp_data = sinh_quy_dao_ngau_nhien(BAN_KINH_GIOI_HAN, SO_BUOC, KICH_THUOC_BUOC)
+
+# Chuyển đổi sang 3D
+X_3d = xp_data
+Y_3d = yp_data * np.cos(THETA)
+Z_3d = yp_data * np.sin(THETA)
+
+# Tạo mặt phẳng nghiêng (để vẽ nền)
+xx, yy = np.meshgrid(np.linspace(-6, 6, 10), np.linspace(-6, 6, 10))
+zz = yy * np.tan(THETA)
+
+# Tạo vòng tròn biên trong 3D
+theta_circ = np.linspace(0, 2*np.pi, 100)
+xc = BAN_KINH_GIOI_HAN * np.cos(theta_circ)
+yc = BAN_KINH_GIOI_HAN * np.sin(theta_circ)
+Yc_3d = yc * np.cos(THETA)
+Zc_3d = yc * np.sin(THETA)
+
+# --- PHẦN 2: HÀM TẠO GIF ---
+
+def tao_gif_3d(ten_file, co_luoi):
+    print(f"-> Đang tạo GIF 3D: {ten_file}...")
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
     
-    return diem_vat_the,
+    # Góc nhìn
+    ax.view_init(elev=20, azim=-45)
+    ax.set_box_aspect([1, 1, 0.5]) # Tỷ lệ khung hình để không bị méo
 
-# Tạo animation
-ani = FuncAnimation(
-    fig, 
-    update, 
-    frames=SO_KHUNG_HINH, 
-    blit=True, # Dùng blit=True để tăng tốc độ vẽ
-    interval=(THOI_GIAN_MAX * 1000 / SO_KHUNG_HINH), # Thời gian (ms) giữa các khung
-    repeat=False # Không lặp lại
-)
+    # Vẽ tĩnh (Mặt phẳng & Vòng tròn)
+    ax.plot(xc, Yc_3d, Zc_3d, 'k--', alpha=0.3, lw=1)
+    
+    if co_luoi:
+        ax.plot_surface(xx, yy, zz, alpha=0.1, color='blue')
+        ax.set_title(f"3D: Mặt phẳng nghiêng {GOC_NGHIENG_DO}° (Có lưới)")
+        ax.set_xlabel('X'); ax.set_ylabel('Y'); ax.set_zlabel('Z')
+    else:
+        # Xóa trục và nền
+        ax.set_axis_off()
+        ax.set_title(f"3D: Mặt phẳng nghiêng {GOC_NGHIENG_DO}° (Không lưới)")
+        # Vẽ mặt phẳng cực mờ để tạo cảm giác không gian
+        ax.plot_surface(xx, yy, zz, alpha=0.05, color='gray')
 
-# --- 4. Lưu Animation thành tệp GIF ---
-TEN_FILE_GIF = 'dao_dong_qua_lai.gif'
+    # Khởi tạo đối tượng động
+    # Dùng plot thay vì scatter để update dễ hơn
+    duong_dan, = ax.plot([], [], [], 'b-', lw=1, alpha=0.6)
+    chat_diem, = ax.plot([], [], [], 'ro', markersize=8) # Vật thể là dấu chấm đỏ
 
-print(f"Bắt đầu lưu animation vào: {TEN_FILE_GIF}...")
+    # Giới hạn khung hình cố định
+    ax.set_xlim(-7, 7)
+    ax.set_ylim(-7, 7)
+    ax.set_zlim(-4, 4)
 
-ani.save(
-    TEN_FILE_GIF, 
-    writer='pillow',
-    fps=SO_KHUNG_HINH / THOI_GIAN_MAX 
-)
+    def update(frame):
+        # Cập nhật đường dẫn
+        duong_dan.set_data(X_3d[:frame], Y_3d[:frame])
+        duong_dan.set_3d_properties(Z_3d[:frame])
+        
+        # Cập nhật vị trí điểm
+        chat_diem.set_data([X_3d[frame]], [Y_3d[frame]]) # Lưu ý: phải để trong list []
+        chat_diem.set_3d_properties([Z_3d[frame]])
+        return duong_dan, chat_diem
 
-print(f"Lưu tệp GIF hoàn tất tại: {TEN_FILE_GIF}")
+    ani = animation.FuncAnimation(fig, update, frames=len(X_3d), interval=INTERVAL, blit=False)
+    ani.save(ten_file, writer='pillow', fps=FPS)
+    plt.close(fig)
+
+def tao_gif_2d(ten_file, co_luoi):
+    print(f"-> Đang tạo GIF 2D: {ten_file}...")
+    fig, ax = plt.subplots(figsize=(6, 6))
+    
+    # Vẽ vòng tròn giới hạn
+    circle = plt.Circle((0, 0), BAN_KINH_GIOI_HAN, color='gray', fill=False, ls='--')
+    ax.add_artist(circle)
+    
+    ax.set_xlim(-7, 7)
+    ax.set_ylim(-7, 7)
+    ax.set_aspect('equal')
+
+    if co_luoi:
+        ax.grid(True, linestyle=':', alpha=0.6)
+        ax.set_title("2D: Tham chiếu (Có lưới)")
+        ax.axhline(0, color='k', lw=0.5)
+        ax.axvline(0, color='k', lw=0.5)
+    else:
+        ax.axis('off')
+        ax.set_title("2D: Tham chiếu (Không lưới)")
+
+    # Đối tượng động
+    line, = ax.plot([], [], 'b-', lw=1, alpha=0.5)
+    point, = ax.plot([], [], 'ro', markersize=8)
+
+    def update(frame):
+        line.set_data(xp_data[:frame], yp_data[:frame])
+        point.set_data([xp_data[frame]], [yp_data[frame]])
+        return line, point
+
+    ani = animation.FuncAnimation(fig, update, frames=len(xp_data), interval=INTERVAL, blit=True)
+    ani.save(ten_file, writer='pillow', fps=FPS)
+    plt.close(fig)
+
+# --- CHẠY CHƯƠNG TRÌNH ---
+if __name__ == "__main__":
+    try:
+        # Tạo 4 video
+        tao_gif_3d('1_3D_CoLuoi.gif', True)
+        tao_gif_3d('2_3D_KhongLuoi.gif', False)
+        tao_gif_2d('3_2D_CoLuoi.gif', True)
+        tao_gif_2d('4_2D_KhongLuoi.gif', False)
+        print("\nHOÀN TẤT! Đã tạo xong 4 file GIF.")
+    except Exception as e:
+        print(f"\nCÓ LỖI XẢY RA: {e}")

@@ -1,11 +1,11 @@
-# app.py (Cập nhật để đọc config.yaml)
+# app.py
 
 from flask import Flask, render_template, request, Response, jsonify
 import cv2
 import threading
 import time
 import os
-import yaml # Thêm thư viện YAML
+import yaml
 
 # Import các logic cần thiết
 from pose_tracker import process_video_stream 
@@ -22,7 +22,6 @@ except FileNotFoundError:
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads/'
 
-# ... (Giữ nguyên phần kiểm tra thư mục upload) ...
 # Đảm bảo thư mục upload tồn tại
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
@@ -37,45 +36,43 @@ video_path = None
 
 
 class VideoProcessor:
-    # ... (Giữ nguyên nội dung lớp VideoProcessor) ...
-    """Quản lý phiên xử lý video, trạng thái chạy và cấu hình."""
     def __init__(self, video_file_path):
         self.video_file_path = video_file_path
-        self.cap = cv2.VideoCapture(video_file_path)
+        self.cap = None 
         self.running = threading.Event() 
         self.running.clear()
         self.stop_requested = False
         self.frame_data = None 
 
     def run(self, settings):
-        """Chạy logic xử lý vision trong pose_tracker.py"""
-        global current_frame
+        global current_frame, is_running
+        
+        self.cap = cv2.VideoCapture(self.video_file_path)
         
         try:
             for processed_frame in process_video_stream(self.video_file_path, settings, self.cap, config):
-                
                 # 1. Cập nhật frame hiện tại để streaming
                 ret, buffer = cv2.imencode('.jpg', processed_frame)
                 if ret:
                     self.frame_data = b'--frame\r\n' + b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n'
                     current_frame = self.frame_data
                 
-                # 2. Kiểm tra trạng thái dừng (Stop/Continue)
+                # 2. Kiểm tra trạng thái dừng
                 if self.stop_requested:
                     self.stop_requested = False 
                     self.running.wait() 
                 
-                # 3. Kiểm tra trạng thái kết thúc hoàn toàn (Reset)
+                # 3. Kiểm tra trạng thái kết thúc hoàn toàn
                 if not self.running.is_set():
                     break 
         except Exception as e:
             print(f"LỖI XỬ LÝ VIDEO: {e}")
-            self.running.clear() # Đảm bảo dừng luồng nếu có lỗi
-            
         finally:
-            self.cap.release()
+            if self.cap:
+                self.cap.release()
+            self.running.clear()
+            is_running = False
             print("Video Processor finished/released.")
-
 
     def start(self):
         self.running.set()
@@ -96,13 +93,21 @@ class VideoProcessor:
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # [CẬP NHẬT] Lấy giá trị mặc định từ config.yaml để gửi sang HTML
+    defaults = {
+        'pose_conf': config['THRESHOLDS'].get('DEFAULT_POSE_CONF', 0.5),
+        'object_conf': config['THRESHOLDS'].get('DEFAULT_OBJECT_CONF', 0.5),
+        'risk_conf': config['THRESHOLDS'].get('DEFAULT_RISK_CONF', 0.5),
+        'pose_skip': config['SKIP_FRAMES'].get('DEFAULT_POSE_SKIP', 2),
+        'object_skip': config['SKIP_FRAMES'].get('DEFAULT_OBJECT_SKIP', 10),
+        'risk_skip': config['SKIP_FRAMES'].get('DEFAULT_RISK_SKIP', 10)
+    }
+    return render_template('index.html', defaults=defaults)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     global video_processor, processing_thread, video_path
     
-    # ... (Giữ nguyên logic upload) ...
     if video_processor:
         video_processor.stop_and_reset()
         if processing_thread and processing_thread.is_alive():
@@ -123,7 +128,6 @@ def upload_file():
         
         return jsonify({'success': True, 'filename': file.filename, 'message': 'Upload thành công. Sẵn sàng Start.'})
 
-
 @app.route('/control', methods=['POST'])
 def control():
     global video_processor, processing_thread, is_running
@@ -134,13 +138,12 @@ def control():
     action = request.json.get('action')
     settings = request.json.get('settings', {})
     
-    # Lấy các giá trị mặc định từ YAML
+    # Lấy các giá trị mặc định từ YAML (Backup nếu frontend gửi thiếu)
     yaml_conf = config['THRESHOLDS']
     yaml_skip = config['SKIP_FRAMES']
 
     if action == 'start':
         if not is_running:
-            # Lấy cấu hình từ frontend, sử dụng YAML defaults nếu không có
             current_settings = {
                 'pose_conf_thresh': float(settings.get('pose_conf_thresh', yaml_conf['DEFAULT_POSE_CONF'])),
                 'object_conf_thresh': float(settings.get('object_conf_thresh', yaml_conf['DEFAULT_OBJECT_CONF'])),
@@ -149,7 +152,6 @@ def control():
                 'object_skip_frames': int(settings.get('object_skip_frames', yaml_skip['DEFAULT_OBJECT_SKIP'])),
                 'risk_skip_frames': int(settings.get('risk_skip_frames', yaml_skip['DEFAULT_RISK_SKIP'])),
                 
-                # Cấu hình vẽ/bật tắt (Sử dụng config['DRAWING'] cho mặc định nếu cần)
                 'keypoint_draw': settings.get('keypoint_draw', config['DRAWING']['DEFAULT_KEYPOINT_DRAW']),
                 'risk_draw_bbox': settings.get('risk_draw_bbox', config['DRAWING']['DEFAULT_RISK_DRAW_BBOX']),
                 'risk_draw_keypoint': settings.get('risk_draw_keypoint', config['DRAWING']['DEFAULT_RISK_DRAW_KEYPOINT']),
@@ -157,18 +159,14 @@ def control():
                 'model_pose_enabled': settings.get('model_pose_enabled', True),
                 'model_object_enabled': settings.get('model_object_enabled', True),
                 'model_risk_enabled': settings.get('model_risk_enabled', True),
-                
                 'draw_grid': settings.get('draw_grid', False)
             }
 
             video_processor.start()
-            is_running = True
-            
-            processing_thread = threading.Thread(target=video_processor.run, 
-                                                 args=(current_settings,), 
-                                                 daemon=True)
+            processing_thread = threading.Thread(target=video_processor.run, args=(current_settings,))
             processing_thread.start()
-            return jsonify({'success': True, 'message': 'Bắt đầu xử lý.'})
+            is_running = True
+            return jsonify({'success': True, 'message': 'Đang xử lý video...'}) 
         
         return jsonify({'success': False, 'message': 'Đã chạy rồi.'})
 
@@ -182,19 +180,18 @@ def control():
     
     elif action == 'reset':
         video_processor.stop_and_reset()
+        if processing_thread and processing_thread.is_alive():
+            processing_thread.join()
         is_running = False
-        return jsonify({'success': True, 'message': 'Đã reset hệ thống.'})
+        return jsonify({'success': True, 'message': 'Đã reset. Sẵn sàng Start lại.'})
 
     return jsonify({'success': False, 'message': 'Hành động không hợp lệ.'}), 400
 
 @app.route('/video_feed')
 def video_feed():
-    """Endpoint để truyền video streaming (Motion JPEG)"""
     global video_processor
-    
     if not video_processor:
         return Response('', mimetype='multipart/x-mixed-replace; boundary=frame')
-        
     return Response(video_processor.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == '__main__':
