@@ -2,7 +2,7 @@
 from . import utils 
 from typing import Dict, List, Tuple, Any
 
-# --- CÁC HẰNG SỐ CHỈ SỐ KEYPOINT ---
+# --- CONSTANTS ---
 LEFT_WRIST_INDEX = 9   
 RIGHT_WRIST_INDEX = 10  
 LEFT_HIP_INDEX = 11     
@@ -11,7 +11,34 @@ NOSE_INDEX = 0
 RIGHT_EYE_INDEX = 2     
 LEFT_EYE_INDEX = 1      
 
-# --- 1. Tính toán Centroid (Giữ nguyên) ---
+# --- CLASS: Action Filter (NEW) ---
+class ActionFilter:
+    """Bộ lọc giúp loại bỏ hiện tượng nhấp nháy trạng thái (flickering)."""
+    def __init__(self, patience=5):
+        self.patience = patience
+        # history: {track_id: {'count': int, 'current_raw': str|None, 'confirmed': str|None}}
+        self.history = {}
+
+    def update(self, track_id, raw_action):
+        if track_id not in self.history:
+            self.history[track_id] = {'count': 0, 'current_raw': None, 'confirmed': None}
+        
+        state = self.history[track_id]
+        
+        # Nếu raw action giống frame trước
+        if raw_action == state['current_raw']:
+            state['count'] += 1
+        else:
+            state['current_raw'] = raw_action
+            state['count'] = 1  # Reset đếm lại
+            
+        # Nếu đủ độ bền (patience), cập nhật hành động chính thức
+        if state['count'] >= self.patience:
+            state['confirmed'] = raw_action
+            
+        return state['confirmed']
+
+# --- HELPER FUNCTIONS ---
 def get_hip_centroid(keypoints: List[List[int]]) -> Tuple[int, int] | None:
     if len(keypoints) < RIGHT_HIP_INDEX + 1: return None
     left_hip = keypoints[LEFT_HIP_INDEX]
@@ -25,7 +52,6 @@ def get_face_centroid(keypoints: List[List[int]]) -> Tuple[int, int] | None:
     right_eye = keypoints[RIGHT_EYE_INDEX]
     return (nose[0] + left_eye[0] + right_eye[0]) // 3, (nose[1] + left_eye[1] + right_eye[1]) // 3
 
-# --- 2. Phân loại Di chuyển (Giữ nguyên) ---
 def get_movement_label(track_id, current_centroid, frame_w, frame_h, history_key, movement_history, config_data):
     cfg = config_data['BEHAVIOR']
     GRID_COLS = cfg['GRID_COLS']
@@ -55,33 +81,21 @@ def get_movement_label(track_id, current_centroid, frame_w, frame_h, history_key
             
     return default_stable
 
-# --- 3. Phân loại Tương tác (TỐI ƯU HÓA) ---
-
 def boxes_intersect(boxA, boxB):
-    """Kiểm tra nhanh 2 hình chữ nhật có chạm nhau không (AABB Collision). Nhanh gấp 10 lần IoU."""
-    # box: [x1, y1, x2, y2]
     return not (boxA[2] < boxB[0] or boxA[0] > boxB[2] or boxA[3] < boxB[1] or boxA[1] > boxB[3])
 
-def classify_interactions(
-    tracked_keypoints: Dict[int, Any], 
-    tracked_bboxes: Dict[int, List[int]], 
-    object_results: List[List[Any]], 
-    config_data: Dict[str, Any]
-) -> Dict[int, str | None]:
-    
+def classify_interactions(tracked_keypoints, tracked_bboxes, object_results, config_data):
     cfg_thresh = config_data['THRESHOLDS']
     cfg_behavior = config_data['BEHAVIOR']
     IOU_HOLDING_THRESHOLD = cfg_thresh['IOU_HOLDING_THRESHOLD']
     
-    # Cache ID mapping
     ID_TAKING = cfg_behavior['CABINET_SHELF_ID']
     ID_PUSHING = cfg_behavior['TROLLEY_ID']
     ID_HOLDING = cfg_behavior['HANDBAG_SATCHEL_ID']
     
     interaction_labels = {}
-    
-    # 1. Phân loại Object một lần duy nhất (Pre-processing)
     targets = {"TAKING": [], "PUSHING": [], "HOLDING": []}
+    
     for obj in object_results:
         if len(obj) < 5: continue
         cid, bbox = obj[4], [int(x) for x in obj[:4]]
@@ -89,10 +103,9 @@ def classify_interactions(
         elif cid == ID_PUSHING: targets["PUSHING"].append(bbox)
         elif cid == ID_HOLDING: targets["HOLDING"].append(bbox)
 
-    # 2. Loop qua từng người
     for tid, kps in tracked_keypoints.items():
         person_box = tracked_bboxes.get(tid)
-        if person_box is None or len(kps) < 11: # Ít nhất phải có cổ tay
+        if person_box is None or len(kps) < 11: 
             interaction_labels[tid] = None
             continue
             
@@ -100,26 +113,19 @@ def classify_interactions(
         action = None
         lw, rw = kps[LEFT_WRIST_INDEX], kps[RIGHT_WRIST_INDEX]
 
-        # CHIẾN LƯỢC GATING: Chỉ check Keypoint khi Box chạm nhau
-        
-        # Check TAKING
         if not action:
             for box in targets["TAKING"]:
-                if boxes_intersect(p_box, box): # Gating check
+                if boxes_intersect(p_box, box): 
                     if utils.is_point_inside_bbox(lw, box) or utils.is_point_inside_bbox(rw, box):
                         action = "TAKING"; break
-        
-        # Check PUSHING
         if not action:
             for box in targets["PUSHING"]:
-                if boxes_intersect(p_box, box): # Gating check
+                if boxes_intersect(p_box, box): 
                     if utils.is_point_inside_bbox(lw, box) or utils.is_point_inside_bbox(rw, box):
                         action = "PUSHING"; break
-                        
-        # Check HOLDING (IoU tốn kém, nên check intersect trước)
         if not action:
             for box in targets["HOLDING"]:
-                if boxes_intersect(p_box, box): # Gating check
+                if boxes_intersect(p_box, box): 
                     if utils.calculate_iou(p_box, box) >= IOU_HOLDING_THRESHOLD:
                         action = "HOLDING"; break
 

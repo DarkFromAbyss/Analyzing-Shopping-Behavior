@@ -50,7 +50,10 @@ BEHAVIOR:
   # Cấu hình Di chuyển 
   GRID_COLS: 20
   MOVEMENT_THRESHOLD_CELLS: 1
-  MOVEMENT_HISTORY_LENGTH: 15
+  MOVEMENT_HISTORY_LENGTH: 30
+
+  #Độ bền của bộ lọc hành động (số frame liên tiếp cần thiết để xác nhận hành động)
+  ACTION_PATIENCE: 5
 
   # ID Lớp của mô hình Rủi ro 
   RISK_NORMAL_ID: 0

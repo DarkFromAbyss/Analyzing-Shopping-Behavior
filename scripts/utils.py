@@ -1,6 +1,6 @@
-# scripts/utils.py
 import cv2
 import numpy as np
+import math
 
 def calculate_iou(boxA, boxB):
     """Tính Intersection over Union (IoU) giữa hai bounding box [x1, y1, x2, y2]."""
@@ -9,7 +9,6 @@ def calculate_iou(boxA, boxB):
     xB = min(boxA[2], boxB[2])
     yB = min(boxA[3], boxB[3])
 
-    # SỬA LỖI: Thay yB - yB bằng yB - yA để tính diện tích phần giao
     interArea = max(0, xB - xA) * max(0, yB - yA)
     
     boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
@@ -19,6 +18,19 @@ def calculate_iou(boxA, boxB):
     if unionArea == 0:
         return 0.0
     return interArea / unionArea
+
+def calculate_center_distance(boxA, boxB):
+    """
+    [MỚI] Tính khoảng cách Euclid giữa tâm của hai bounding box.
+    Dùng để khôi phục ID khi IoU = 0 (do skip frames).
+    """
+    cxA = (boxA[0] + boxA[2]) / 2
+    cyA = (boxA[1] + boxA[3]) / 2
+    cxB = (boxB[0] + boxB[2]) / 2
+    cyB = (boxB[1] + boxB[3]) / 2
+    
+    # Tính khoảng cách Euclidean: sqrt((x1-x2)^2 + (y1-y2)^2)
+    return math.sqrt((cxA - cxB)**2 + (cyA - cyB)**2)
 
 def is_point_inside_bbox(point, bbox):
     px, py = point
