@@ -11,8 +11,7 @@ from typing import Dict, Any, Generator
 
 # Imports
 from scripts.tracker import KalmanFilterBox, SKELETON_CONNECTIONS
-# [CẬP NHẬT] Import thêm calculate_center_distance
-from scripts.utils import calculate_iou, draw_skeleton, calculate_center_distance
+from scripts.utils import calculate_iou, draw_skeleton
 from scripts.behavior import (
     get_hip_centroid, get_face_centroid, get_movement_label, 
     classify_interactions, ActionFilter
@@ -21,14 +20,12 @@ from scripts.behavior import (
 # Constants
 RISK_LABELS = {0: "NORMAL", 1: "SUSPICIOUS"}
 MAX_LOST_FRAMES = 30    
-# IoU thresh vẫn giữ cho các logic khác, nhưng Recovery sẽ dùng Distance
 IOU_RECOVERY_THRESH = 0.3 
 EMA_ALPHA = 0.3 
 THRESH_ML_FRAMES = 15   
 
-# [MỚI] Ngưỡng khoảng cách tối đa để recover ID (pixel). 
-# Tăng lên nếu đối tượng di chuyển rất nhanh hoặc skip frame rất nhiều.
-MAX_DIST_RECOVERY = 200.0 
+# [CẬP NHẬT] Ngưỡng Mahalanobis (Chi-squared distribution, df=4, p=0.05 => 9.488)
+THRESH_MAHALANOBIS = 9.488
 
 class BehaviorTracker:
     def __init__(self, config_data: Dict[str, Any]):
@@ -160,8 +157,8 @@ class BehaviorTracker:
 
                         for c in confs: self.sum_pose_conf += c; self.cnt_pose += 1
 
-                        # --- LOGIC KHÔI PHỤC ID (RECOVERY) ĐÃ CẬP NHẬT ---
-                        # Dùng Distance thay vì IoU để chống skip frame
+                        # --- LOGIC KHÔI PHỤC ID (RECOVERY) CẬP NHẬT ---
+                        # Sử dụng Khoảng cách Mahalanobis thay vì Euclidean
                         det_ids, ext_ids = set(ids), set(self.kalman_filters.keys())
                         new_ids, lost_ids = det_ids - ext_ids, ext_ids - det_ids
                         
@@ -174,15 +171,14 @@ class BehaviorTracker:
                             for lid in lost_ids:
                                 kf = self.kalman_filters[lid]
                                 if kf.time_since_update < MAX_LOST_FRAMES:
-                                    pbox = [int(x) for x in kf.get_rect()]
+                                    # [MỚI] Sử dụng Mahalanobis Distance
+                                    dist = kf.get_mahalanobis_distance(nbox)
                                     
-                                    # [MỚI] Sử dụng Distance
-                                    dist = calculate_center_distance(nbox, pbox)
                                     if dist < min_dist:
                                         min_dist, best_match = dist, lid
                                         
-                            # Kiểm tra ngưỡng khoảng cách
-                            if best_match is not None and min_dist < MAX_DIST_RECOVERY:
+                            # Kiểm tra ngưỡng Chi-squared
+                            if best_match is not None and min_dist < THRESH_MAHALANOBIS:
                                 id_map[nid] = best_match
                                 new_ids.remove(nid)
                                 lost_ids.remove(best_match)

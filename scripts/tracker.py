@@ -102,3 +102,33 @@ class KalmanFilterBox:
         cx, cy, a, h = cxcyah
         w = a * h
         return [cx-w/2, cy-h/2, cx+w/2, cy+h/2]
+    
+    def get_mahalanobis_distance(self, measurement_xyxy):
+        """
+        Tính khoảng cách Mahalanobis giữa trạng thái dự đoán của Kalman
+        và hộp đo đạc mới (measurement).
+        """
+        # 1. Chuyển đổi measurement sang không gian (cx, cy, a, h)
+        z = np.array(self._xyxy_to_cxcyah(measurement_xyxy))
+
+        # 2. Lấy trạng thái dự đoán hiện tại (Mean)
+        x = self.kf.x
+
+        # 3. Tính ma trận hiệp phương sai trong không gian đo đạc (System Uncertainty S)
+        # S = H * P * H.T + R
+        P = self.kf.P
+        H = self.kf.H
+        R = self.kf.R
+        S = np.dot(np.dot(H, P), H.T) + R
+
+        # 4. Tính độ lệch (Innovation / Residual)
+        # y = z - Hx
+        y = z - np.dot(H, x)
+
+        # 5. Tính khoảng cách Mahalanobis: sqrt(y.T * S^-1 * y)
+        try:
+            inv_S = scipy.linalg.inv(S)
+            mahalanobis_dist = np.sqrt(np.dot(np.dot(y.T, inv_S), y))
+            return mahalanobis_dist
+        except np.linalg.LinAlgError:
+            return float('inf') # Trả về vô cùng nếu ma trận lỗi
