@@ -11,3 +11,4 @@ flask-cors
 psycopg2
 scipy
 filterpy
+redis
