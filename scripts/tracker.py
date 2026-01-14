@@ -1,3 +1,4 @@
+import scipy
 import numpy as np
 from filterpy.kalman import KalmanFilter
 
