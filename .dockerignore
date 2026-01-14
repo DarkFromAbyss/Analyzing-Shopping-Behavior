@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+
+# Docker configuration
+docker-compose.yaml
+Dockerfile
+.dockerignore
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+build
+dist
+*.egg-info
+.coverage
+
+# Virtual Environments (Bỏ qua môi trường ảo local của bạn)
+venv/
+env/
+myenv/
+.env
+
+# Editor settings
+.idea
+.vscode
+*.swp
+
+# Dữ liệu Uploads
+# Chúng ta đã mount volume trong docker-compose, nên không cần copy file cũ vào image
+uploads/*
+!uploads/.gitkeep
+
+# Logs
+*.log
