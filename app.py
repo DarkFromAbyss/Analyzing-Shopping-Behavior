@@ -1,4 +1,7 @@
 # app.py
+import os
+# Dòng này "tắt" báo lỗi khi có xung đột thư viện OpenMP
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 from flask import Flask, render_template, request, Response, jsonify
 import cv2
