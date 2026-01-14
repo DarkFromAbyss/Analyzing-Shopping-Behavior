@@ -1,4 +1,5 @@
 import cv2
+import scipy
 from ultralytics import YOLO
 import numpy as np
 import traceback

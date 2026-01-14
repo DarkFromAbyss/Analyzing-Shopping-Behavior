@@ -1,14 +1,27 @@
+
+# Chỉ định nguồn tải PyTorch bản CPU
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Các thư viện cốt lõi cho AI (Bản CPU)
+torch
+torchvision
+torchaudio
+ultralytics
+
+# Các thư viện xử lý dữ liệu và hình ảnh
 numpy
 pyyaml
 pandas
 seaborn
 roboflow
-matplotlib  
-ultralytics
+matplotlib
 albumentations
-Flask 
-flask-cors
-psycopg2
 scipy
 filterpy
 redis
+
+# Backend Web
+Flask
+flask-cors
+# Dùng bản binary để tránh lỗi biên dịch C++ trên Windows
+psycopg2-binary
