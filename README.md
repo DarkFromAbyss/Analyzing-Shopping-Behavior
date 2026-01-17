@@ -93,17 +93,3 @@ docker run --gpus all --rm -p 5000:5000 -v $(pwd)/uploads:/app/uploads final-app
 - Sửa `config.yaml` để trỏ tới mô hình và điều chỉnh thresholds/skip frames.
 - Thêm `device` trong payload `settings` để ép dùng `cpu` hoặc `cuda`.
 
-## Troubleshooting
-
-- Nếu Docker build lỗi do `psycopg2`, cài `libpq-dev` hoặc dùng `psycopg2-binary` trong `requirements.txt`.
-- Nếu mô hình không load: kiểm tra `config.yaml` và file model trong `models/`.
-- Nếu chậm: tăng `skip_frames`, giảm độ phân giải ảnh, hoặc chạy trên GPU.
-
-## Gợi ý phát triển
-
-- Pin `torch` wheel tương thích CUDA trong Dockerfile để build GPU ổn định.
-- Thêm test tự động và sample video trong `uploads/`.
-
-## License
-
-- Thêm license và credits tại đây.
