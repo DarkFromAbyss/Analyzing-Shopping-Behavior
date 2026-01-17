@@ -1,10 +1,11 @@
-vieets # FINAL — Pose, Object & Behavior Tracking
+vieets # Analyzing-Shopping-Behavior — Pose, Object & Behavior Tracking
 
-**Project name:** FINAL
+**Project name:** Analyzing-Shopping-Behavior
+
 
 ## Giới thiệu
 
-`FINAL` là một ứng dụng xử lý video (real-time hoặc offline) dựa trên Flask, kết hợp ba thành phần chính:
+`Analyzing-Shopping-Behavior` là một application xử lý video (real-time hoặc offline) dựa trên Flask, kết hợp ba thành phần chính:
 - Ước lượng pose (pose estimation) để lấy keypoints người.
 - Phát hiện và phân loại vật thể (object detection) để nhận diện các đối tượng quan tâm.
 - Phát hiện hành vi / đánh giá rủi ro (behavior/risk classification) để suy luận tương tác người–vật.
@@ -20,13 +21,12 @@ Hệ thống dùng Ultralytics (YOLO) cho inference, Kalman filter + tracker đ�
 ## Performance (ước lượng / tham chiếu)
 
 - Inference latency: ~15–60 ms / frame trên GPU (tùy mô hình và kích thước ảnh).
-- CPU throughput: ~1–5 fps trên CPU consumer (tùy CPU và kích thước ảnh).
+- CPU throughput: ~40-50 fps trên CPU consumer (tùy CPU và kích thước ảnh).
 - Tracking stability: giữ ID ổn định trong đa số trường hợp chuyển động chậm/ trung bình; cạnh trường hợp occlusion dài có thể mất ID.
-
-Lưu ý: các con số trên là ước lượng; hiệu năng thực tế phụ thuộc vào mô hình (`best.pt`, `yolo11n_object365.pt`, `yolo11n-pose.pt`), độ phân giải, và thiết bị (CPU/GPU).
 
 ## Công nghệ sử dụng
 
+- Frontend: `HTML`, `CSS`
 - Backend: `Flask`
 - Detection / Pose: Ultralytics YOLO (PyTorch)
 - Tracking: Kalman filter + custom tracker (scripts/tracker.py)
@@ -39,7 +39,7 @@ Lưu ý: các con số trên là ước lượng; hiệu năng thực tế phụ
 - `pose_tracker.py` — pipeline inference, tracking, drawing, streaming
 - `scripts/` — `tracker.py`, `behavior.py`, `utils.py`
 - `models/` — chứa trọng số mô hình
-- `uploads/` — video input
+- `templates/index.html` - giao diện demo
 
 ## Cài đặt (không dùng Docker)
 
@@ -85,7 +85,7 @@ python app.py
 
 2. (Tuỳ chọn) Chỉnh `docker-compose.yaml`:
 
-- Mình đã thêm service `redis` và volume `redis-data` sẵn vào `docker-compose.yaml`.
+- Thêm service `redis` và volume `redis-data` sẵn vào `docker-compose.yaml`.
 - Nếu muốn khởi động với hỗ trợ GPU, cấu hình service `pose_tracker` để dùng runtime NVIDIA (tham khảo comment trong file).
 
 3. Build image (không dùng compose):
@@ -158,20 +158,6 @@ docker run --gpus all --rm -p 5000:5000 -v %cd%/uploads:/app/uploads final-app-g
 - Nếu model không load: kiểm tra đường dẫn file trong `models/` và `config.yaml`.
 - Nếu Docker build lỗi liên quan thư viện native (ví dụ `psycopg2`): cài thêm hệ thống packages tương ứng hoặc dùng phiên bản binary.
 - Nếu chậm: giảm độ phân giải input, tăng `skip_frames`, hoặc chạy trên GPU.
-
-## Gợi ý phát triển
-
-- Pin phiên bản `torch` phù hợp với CUDA khi build Docker để tránh lỗi runtime.
-- Thêm test tự động cho pipeline inference/tracking.
-- Cung cấp sample videos trong `uploads/sample/` để dễ QA.
-
-## License
-
-- Thêm license và credits tại đây (ví dụ MIT).
-
----
-
-See the main server at [app.py](app.py) and configuration at [config.yaml](config.yaml).
 
 ## Redis — Cài đặt & Hướng dẫn sử dụng chi tiết
 
